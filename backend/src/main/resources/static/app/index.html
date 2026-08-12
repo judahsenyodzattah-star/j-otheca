@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LibraNet — demo client</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  :root { --indigo:#4F46E5; --indigo-d:#3730A3; --bg:#F8FAFC; --card:#FFFFFF; --ink:#0F172A;
+          --mut:#64748B; --line:#E2E8F0; --green:#15803D; --red:#B91C1C; --amber:#B45309; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+         background:var(--bg); color:var(--ink); }
+  .bar { background:var(--indigo); color:#fff; padding:14px 20px; display:flex; gap:14px;
+         align-items:center; position:sticky; top:0; z-index:5; box-shadow:0 2px 8px #0002; }
+  .bar b { font-size:18px; letter-spacing:.3px; }
+  .bar .who { margin-left:auto; font-size:13px; opacity:.92; display:flex; gap:10px; align-items:center; }
+  .libpill { background:#ffffff26; border:1px solid #ffffff44; padding:4px 10px; border-radius:99px; font-size:12px; }
+  nav.tabs { display:flex; gap:6px; padding:10px 20px 0; max-width:1080px; margin:auto; flex-wrap:wrap; }
+  nav.tabs button { border:1px solid var(--line); background:#fff; padding:9px 16px; border-radius:99px;
+                    cursor:pointer; font-size:14px; color:var(--mut); }
+  nav.tabs button.on { background:var(--indigo); border-color:var(--indigo); color:#fff; }
+  main { max-width:1080px; margin:14px auto 60px; padding:0 20px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px;
+          margin-bottom:14px; box-shadow:0 1px 2px #0001; }
+  h2 { margin:2px 0 4px; font-size:19px; } h3 { margin:14px 0 6px; font-size:15px; }
+  .sub { color:var(--mut); font-size:13px; margin:0 0 12px; }
+  input[type=text], input[type=password], input[type=email] { width:100%; padding:11px 12px;
+    border:1px solid var(--line); border-radius:10px; font-size:14px; background:#fff; }
+  input:focus { outline:2px solid #4F46E533; border-color:var(--indigo); }
+  button.b { background:var(--indigo); color:#fff; border:none; padding:11px 18px; border-radius:10px;
+             cursor:pointer; font-size:14px; font-weight:600; }
+  button.b:hover { background:var(--indigo-d); }
+  button.o { background:#fff; color:var(--indigo); border:1px solid var(--indigo); padding:10px 16px;
+             border-radius:10px; cursor:pointer; font-size:14px; font-weight:600; }
+  button.mini { background:#EEF2FF; color:var(--indigo-d); border:none; padding:7px 12px;
+                border-radius:8px; cursor:pointer; font-size:12.5px; font-weight:600; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .row > * { flex:0 0 auto; }
+  .grow { flex:1 1 auto; }
+  .grid { display:grid; gap:14px; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); }
+  .chip { display:inline-block; background:#EEF2FF; color:var(--indigo-d); border-radius:99px;
+          padding:2px 10px; font-size:12px; margin:2px 4px 2px 0; }
+  .chip.gray { background:#F1F5F9; color:var(--mut); }
+  .chip.green { background:#DCFCE7; color:var(--green); }
+  .chip.amber { background:#FEF3C7; color:var(--amber); }
+  .tr { display:flex; gap:12px; padding:12px 4px; border-bottom:1px solid var(--line); align-items:flex-start; }
+  .tr:last-child { border-bottom:none; }
+  .tr .t { font-weight:600; font-size:14.5px; } .tr .s { color:var(--mut); font-size:12.5px; margin-top:2px; }
+  .avail { font-size:12.5px; font-weight:700; white-space:nowrap; }
+  .ok { color:var(--green); } .no { color:var(--red); }
+  .score { font-size:12px; color:var(--mut); white-space:nowrap; }
+  .why { font-size:12.5px; color:var(--mut); margin-top:6px; }
+  .why div::before { content:"— "; }
+  .qrbox { display:flex; flex-direction:column; align-items:center; gap:8px; padding:10px; }
+  .qrbox .num { font-size:22px; font-weight:700; letter-spacing:1px; }
+  #qr img, #qr canvas { border:6px solid #fff; border-radius:8px; box-shadow:0 1px 4px #0002; }
+  .note { background:#FFFBEB; border:1px solid #FDE68A; color:#92400E; font-size:13px;
+          border-radius:10px; padding:10px 12px; }
+  .err { color:var(--red); font-size:13px; margin-top:8px; }
+  .hidden { display:none !important; }
+  select { padding:11px 12px; border:1px solid var(--line); border-radius:10px; font-size:14px; background:#fff; }
+  .kpi { display:flex; gap:14px; flex-wrap:wrap; }
+  .kpi .k { background:#F8FAFC; border:1px solid var(--line); border-radius:10px; padding:10px 14px; }
+  .kpi .k b { font-size:18px; display:block; }
+</style>
+</head>
+<body>
+<header class="bar">
+  <b>📚 LibraNet</b> <span style="opacity:.75;font-size:13px">demo web mirror of the Flutter client</span>
+  <div class="who">
+    <span id="whoName" class="hidden"></span>
+    <span id="whoLib" class="libpill hidden"></span>
+    <button id="btnOut" class="mini hidden" onclick="signOut()">Sign out</button>
+  </div>
+</header>
+
+<section id="login" class="card" style="max-width:520px;margin:48px auto">
+  <h2>Sign in</h2>
+  <p class="sub">Real authentication against the live LibraNet API — same accounts the library demo uses.</p>
+  <div id="acctBtns" class="row" style="margin-bottom:12px"></div>
+  <label class="sub" for="email">Email</label>
+  <input id="email" type="email" autocomplete="username">
+  <div style="height:8px"></div>
+  <label class="sub" for="pw">Password</label>
+  <input id="pw" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+  <div style="height:14px"></div>
+  <button class="b" onclick="doLogin()">Sign in</button>
+  <div id="loginErr" class="err"></div>
+</section>
+
+<div id="app" class="hidden">
+<nav class="tabs">
+  <button id="tab-home" onclick="show('home')">Home</button>
+  <button id="tab-discover" onclick="show('discover')">Discover</button>
+  <button id="tab-catalog" onclick="show('catalog')">Catalog</button>
+  <button id="tab-ai" onclick="show('ai')">✨ AI discovery</button>
+</nav>
+<main id="view"></main>
+</div>
+
+<script>
+const presets = [
+  {label:'👤 Patron — Accra Central', email:'patron@libranet.app', pw:'Patron12345!'},
+  {label:'🛠 Librarian — Pentecost Univ.', email:'staff@libranet.app', pw:'Library12345!'},
+  {label:'🧭 Library admin — Accra', email:'accraadmin@libranet.app', pw:'Library12345!'},
+  {label:'✍️ Personal author', email:'author@libranet.app', pw:'Author12345!'},
+  {label:'🏛 Platform super admin', email:'admin@libranet.app', pw:'Admin12345!'},
+];
+document.getElementById('acctBtns').innerHTML =
+  presets.map((p,i)=>`<button class="mini" onclick="preset(${i})">${p.label}</button>`).join('');
+
+const S = { token:null, me:null, memberships:[], uid:null, tab:'home' };
+function preset(i){ email.value = presets[i].email; pw.value = presets[i].pw; }
+function signOut(){ S.token=null; S.memberships=[]; S.uid=null;
+  app.classList.add('hidden'); login.classList.remove('hidden');
+  whoName.classList.add('hidden'); whoLib.classList.add('hidden'); btnOut.classList.add('hidden'); }
+
+async function doLogin(){
+  loginErr.textContent = '';
+  try {
+    const r = await fetch('/api/v1/auth/login', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({email: email.value.trim(), password: pw.value})});
+    const j = await r.json();
+    if(!r.ok) throw new Error(j.message || ('HTTP '+r.status));
+    S.token = j.accessToken;
+    const m = await api('/api/v1/me/memberships', {}, true);
+    S.memberships = (Array.isArray(m) ? m : (m.content||[])).filter(x => x.status==='APPROVED');
+    if(!S.memberships.length) throw new Error('This account has no approved library membership yet.');
+    S.uid = S.memberships[0].libraryUid;
+    whoName.textContent = email.value; whoName.classList.remove('hidden');
+    btnOut.classList.remove('hidden');
+    login.classList.add('hidden'); app.classList.remove('hidden');
+    show('home');
+  } catch(e){ loginErr.textContent = e.message; }
+}
+function active(){ return S.memberships.find(m=>m.libraryUid===S.uid); }
+function isStaff(){ const r = active()?.role; return r==='LIBRARY_ADMIN' || r==='LIBRARIAN'; }
+async function api(path, opts={}, noTenant){
+  opts.headers = Object.assign({'Authorization':'Bearer '+S.token}, opts.headers||{});
+  if(!noTenant) opts.headers['X-Library-Id'] = S.uid;
+  const r = await fetch(path, opts); const j = await r.json().catch(()=>({}));
+  if(!r.ok) throw Object.assign(new Error(j.message || ('HTTP '+r.status)), {code:j.code});
+  return j;
+}
+function show(t){ S.tab=t; document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('on'));
+  document.getElementById('tab-'+t).classList.add('on');
+  ({home:renderHome, discover:renderDiscover, catalog:renderCatalog, ai:renderAi})[t](); }
+function esc(s){ return String(s??'').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function pretty(s){ return String(s||'').toLowerCase().split('_').map(w=>w[0]?.toUpperCase()+w.slice(1)).join(' '); }
+
+async function renderHome(){
+  whoLib.textContent = active()?.libraryName || S.uid; whoLib.classList.remove('hidden');
+  let qrcard='';
+  const a = active();
+  if (a) qrcard = `<div class="card qrbox">
+      <h3>Membership card</h3>
+      <div id="qr"></div>
+      <div class="num">${esc(a.membershipNumber||'')}</div>
+      <div class="sub">${esc(a.libraryName||'')} · ${pretty(a.role)}</div>
+      <div class="row"><button class="b" onclick="show('catalog')">Browse catalog</button>
+      <button class="o" onclick="show('ai')">✨ AI discovery</button></div></div>`;
+  view.innerHTML = `<h2>Your libraries</h2>
+    <p class="sub">Global identity — one account, per-library memberships and roles.</p>
+    <div class="grid">${S.memberships.map(m=>`
+      <div class="card" style="cursor:pointer;${m.libraryUid===S.uid?'outline:2px solid var(--indigo)':''}"
+           onclick="S.uid='${m.libraryUid}'; renderHome()">
+        <b>${esc(m.libraryName||m.libraryUid)}</b>
+        <div class="sub">${pretty(m.role)} · ${pretty(m.membershipType)} · ${esc(m.libraryUid)}</div>
+        ${m.libraryUid===S.uid?'<span class="chip green">active</span>':'<span class="chip gray">tap to switch</span>'}
+      </div>`).join('')}</div>${qrcard}`;
+  if (a){ const d = a.membershipNumber || a.membershipId;
+    try { new QRCode(document.getElementById('qr'), {text:d, width:150, height:150}); }
+    catch(e){ document.getElementById('qr').innerHTML = `<span class="num">${esc(d)}</span>`; } }
+}
+
+async function renderDiscover(){
+  view.innerHTML = `<h2>Discover libraries</h2><p class="sub">Anonymous-safe public directory.</p>
+    <div class="row" style="margin-bottom:14px"><input class="grow" id="dq" type="text"
+      placeholder="Search by name or description…" onkeydown="if(event.key==='Enter')renderDiscover()">
+      <button class="b" onclick="renderDiscover()">Search</button></div><div id="dres"></div>`;
+  const q = dq.value?.trim();
+  try {
+    const p = await api('/api/v1/libraries' + (q?('?search='+encodeURIComponent(q)):''), {}, true);
+    dres.innerHTML = `<div class="grid">${(p.content||[]).map(l=>`<div class="card">
+      <b>${esc(l.name)}</b> <span class="chip">${esc(l.type)}</span>
+      <div class="sub">${esc([l.city,l.country].filter(Boolean).join(', '))} · ${l.memberCount} members · join: ${pretty(l.joinPolicy)}</div>
+      ${l.description?`<div class="sub">${esc(l.description)}</div>`:''}</div>`).join('')||'<p class="sub">No matches.</p>'}</div>`;
+  } catch(e){ dres.innerHTML = `<p class="err">${esc(e.message)}</p>`; }
+}
+
+async function renderCatalog(){
+  view.innerHTML = `<h2>Catalog</h2><p class="sub">Tenant-scoped search — served only from the active library.</p>
+    <div class="row" style="margin-bottom:14px"><input class="grow" id="cq" type="text"
+      placeholder="Title, author, subject or ISBN…" onkeydown="if(event.key==='Enter')renderCatalog()">
+      <button class="b" onclick="renderCatalog()">Search</button></div><div id="cres" class="card"></div>`;
+  try {
+    const p = await api('/api/v1/tenant/catalog/books?size=40' + (cq.value?.trim()?('&q='+encodeURIComponent(cq.value.trim())):''));
+    const rows = (p.content||[]);
+    cres.innerHTML = rows.length ? rows.map(b=>`<div class="tr">
+      <div class="grow"><div class="t">${esc(b.title)}</div>
+      <div class="s">${esc(b.author||'')}${b.categoryName?' · '+esc(b.categoryName):''}${b.publishedYear?' · '+b.publishedYear:''}</div></div>
+      <span class="avail ${b.availableCopies>0?'ok':'no'}">${b.availableCopies>0?b.availableCopies+' available':'out'}</span></div>`).join('')
+      : '<p class="sub">No books match — staff see this as demand in AI insights.</p>';
+  } catch(e){ cres.innerHTML = `<p class="err">${esc(e.message)}</p>`; }
+}
+
+async function renderAi(){
+  const staff = isStaff();
+  view.innerHTML = `<h2>✨ AI discovery</h2>
+    <p class="sub">Semantic ranking runs inside this library only — tenant-isolation layer 9.</p>
+    <div id="usageChip"></div>
+    <div class="card"><h3>Semantic search</h3>
+      <p class="sub">Ask naturally — e.g. “beginner Java books after 2023”.</p>
+      <div class="row"><input class="grow" id="aq" type="text"
+        value="beginner Java books after 2023" onkeydown="if(event.key==='Enter')aiSearch()">
+        <button class="b" onclick="aiSearch()">Search</button></div>
+      <div id="ares"></div></div>
+    <div class="card"><h3>For you</h3><p class="sub">From your loans, ratings and want-it marks — never titles you already consumed.</p><div id="recs"></div></div>
+    <div id="staffzone"></div>`;
+  aiSearch(); loadRecs();
+  if(staff){
+    staffzone.innerHTML = `
+    <div class="card"><h3>Ask the assistant (staff)</h3>
+      <div class="row"><input class="grow" id="askq" type="text" value="what should we buy more copies of?"
+        onkeydown="if(event.key==='Enter')ask()"><button class="b" onclick="ask()">Ask</button></div>
+      <div id="askres"></div></div>
+    <div class="card"><h3>Demand insights (staff)</h3><div id="dinsights"></div></div>`;
+    loadUsage(); loadInsights();
+  } else {
+    staffzone.innerHTML = `<div class="note">Staff-only: the assistant, demand insights and the AI usage meter appear when the
+      active membership is Librarian/Admin — sign in as the Pentecost librarian to see them.</div>`;
+  }
+}
+async function loadUsage(){ try { const u = await api('/api/v1/tenant/ai/usage');
+  usageChip.innerHTML = `<span class="chip amber">⚡ ${u.used} / ${u.limit} AI calls this month</span>`;
+  } catch(e){} }
+async function aiSearch(){ try {
+  const r = await api('/api/v1/tenant/ai/search?q='+encodeURIComponent(aq.value.trim()));
+  const f = r.filters||{}; const fc = f.publishedAfter?`published after ${f.publishedAfter}`:f.publishedBefore?`published before ${f.publishedBefore}`:f.publishedIn?`published in ${f.publishedIn}`:null;
+  ares.innerHTML = (fc?`<span class="chip">⛳ filter: ${fc}</span><div style="height:6px"></div>`:'') +
+    (r.hits||[]).map(h=>`<div class="tr"><div class="grow">
+      <div class="t">${esc(h.title)}</div><div class="s">${esc(h.author)}${h.publishedYear?' · '+h.publishedYear:''}</div>
+      <div>${(h.matchedTokens||[]).map(t=>`<span class="chip">${esc(t)}</span>`).join('')}</div>
+      <div class="why">${(h.why||[]).map(w=>`<div>${esc(w)}</div>`).join('')}</div></div>
+      <span class="score">${Math.round((h.score||0)*100)}% match</span></div>`).join('')
+    || '<p class="sub">No semantic matches — recorded as uncatalogued demand.</p>';
+  loadUsage();
+  } catch(e){ ares.innerHTML = `<p class="err">${esc(e.message)}${e.code==='PLAN_LIMIT_EXCEEDED'?' (plan meter hit)':''}</p>`; } }
+async function loadRecs(){ try { const r = await api('/api/v1/tenant/ai/recommendations');
+  recs.innerHTML = (r.recommendations||[]).map(x=>`<div class="tr"><div class="grow">
+    <div class="t">${esc(x.title)}</div><div class="s">${esc(x.author)}</div>
+    <div class="why"><div>${(x.because||[]).map(esc).join(' · ')}</div></div></div>
+    ${x.ratingCount?`<span class="score">★ ${x.ratingAvg.toFixed(1)}</span>`:''}</div>`).join('')
+    || '<p class="sub">Borrow, rate or flag titles to build your profile.</p>';
+  } catch(e){ recs.innerHTML = `<p class="err">${esc(e.message)}</p>`; } }
+async function ask(){ askres.innerHTML='<p class="sub">Thinking…</p>'; try {
+  const r = await api('/api/v1/tenant/ai/assistant/ask', {method:'POST',
+    headers:{'Content-Type':'application/json'}, body: JSON.stringify({question: askq.value.trim()})});
+  askres.innerHTML = `<span class="chip">${pretty(r.intent)}</span>
+    <p style="font-size:14px;margin:8px 0">${esc(r.answer)}</p>
+    <div>${(r.citations||[]).map(c=>`<span class="chip gray">📖 ${esc(c.title)}</span>`).join('')}</div>
+    <p class="sub" style="margin:8px 0 0">Audit keeps the intent and question length — never the question text.</p>`;
+  loadUsage();
+  } catch(e){ askres.innerHTML = `<p class="err">${esc(e.message)}</p>`; } }
+async function loadInsights(){ try { const r = await api('/api/v1/tenant/ai/demand-insights');
+  dinsights.innerHTML =
+    (r.topDemanded||[]).map(d=>`<div class="tr"><div class="grow"><div class="t">${esc(d.title)}</div>
+      <div class="s">${d.interests} want-it · ${d.waitingReservations} waiting<br>${esc(d.suggestion||'')}</div></div></div>`).join('') +
+    ((r.uncataloguedDemand||[]).length ? `<h4 style="margin:10px 0 4px">Searched but not in the catalog</h4>` +
+      r.uncataloguedDemand.map(z=>`<div class="tr"><div class="grow"><div class="t">${esc(z.query)}</div>
+        <div class="s">${z.occurrences} searches<br>${esc(z.suggestion||'')}</div></div></div>`).join('') : '') +
+    ((r.summary||[]).map(s=>`<div class="why"><div>${esc(s)}</div></div>`).join('')) ||
+    '<p class="sub">No demand signals recorded this period.</p>';
+  loadUsage();
+  } catch(e){ dinsights.innerHTML = `<p class="err">${esc(e.message)}</p>`; } }
+</script>
+</body>
+</html>

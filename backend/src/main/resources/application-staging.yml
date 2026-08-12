@@ -1,0 +1,40 @@
+# Staging profile — real infrastructure, fail-fast configuration.
+# No secret defaults exist here on purpose. Fill infra/.env (see infra/.env.staging.example).
+# Datasource itself comes from SPRING_DATASOURCE_* in application.yml (point it at real Postgres).
+spring:
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+      timeout: 2s
+  mail:
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:1025}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail.smtp.auth: ${MAIL_SMTP_AUTH:false}
+      mail.smtp.starttls.enable: ${MAIL_STARTTLS:false}
+
+app:
+  public-base-url: ${PUBLIC_BASE_URL:}            # REQUIRED — share URLs / deep links build from it
+  cors-allowed-origin-patterns: ${CORS_ORIGINS:}  # REQUIRED — no wildcard outside dev
+  rate-limit:
+    backend: redis                                # multi-instance safe throttling
+  storage:
+    provider: minio                               # durable object storage (MINIO_* env)
+  ai:
+    embedder: ${AI_EMBEDDER:local}
+    search:
+      backend: pgvector                           # real ANN on Postgres (V17 HNSW)
+
+management:
+  health:
+    redis:
+      enabled: true                               # staging actually uses Redis
+
+springdoc:
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:false}             # API docs off by default outside dev
+  api-docs:
+    enabled: ${SWAGGER_ENABLED:false}

@@ -1,0 +1,25 @@
+# Dev profile: zero dependencies (H2 in Postgres mode) so the app runs anywhere, incl. the sandbox demo.
+# Postgres RLS defense layer self-activates only on real Postgres; all other isolation layers stay on.
+spring:
+  datasource:
+    url: jdbc:h2:mem:libranet;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  h2:
+    console:
+      enabled: false
+
+app:
+  jwt-secret: dev-only-insecure-secret-change-me-0123456789abcdef0123456789   # DEV ONLY — never reuse
+  public-base-url: http://localhost:8080
+
+logging:
+  level:
+    root: info
+    org.springframework.security: info
+
+management:
+  health:
+    mail:
+      enabled: false    # no SMTP in offline dev; LoggingMailService is used instead

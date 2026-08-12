@@ -1,0 +1,68 @@
+name: libranet
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: libranet-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-libranet}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-libranet}
+      POSTGRES_DB: ${POSTGRES_DB:-libranet}
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U libranet"], interval: 5s, retries: 20 }
+
+  redis:
+    image: redis:7-alpine
+    container_name: libranet-redis
+    ports: ["6379:6379"]
+    volumes: [redisdata:/data]
+    healthcheck: { test: ["CMD", "redis-cli", "ping"], interval: 5s, retries: 20 }
+
+  minio:
+    image: minio/minio:latest
+    container_name: libranet-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-libranet}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-libranet-secret-change-me}
+    ports: ["9000:9000", "9001:9001"]
+    volumes: [miniodata:/data]
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: libranet-mailpit
+    ports: ["1025:1025", "8025:8025"]   # SMTP :1025, web UI :8025
+
+  backend:
+    build: ../backend
+    container_name: libranet-backend
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      minio: { condition: service_started }
+    environment:
+      SPRING_PROFILES_ACTIVE: staging
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-libranet}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-libranet}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      APP_JWT_SECRET: ${APP_JWT_SECRET:?set APP_JWT_SECRET in .env}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:?set PUBLIC_BASE_URL in .env}
+      CORS_ORIGINS: ${CORS_ORIGINS:?set CORS_ORIGINS in .env}
+      SWAGGER_ENABLED: ${SWAGGER_ENABLED:-false}
+      # staging profile pins Redis rate limiting + MinIO storage + pgvector AI search
+      SPRING_DATA_REDIS_HOST: redis
+      STORAGE_PROVIDER: minio
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER in .env}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD in .env}
+      MINIO_BUCKET: ${MINIO_BUCKET:-libranet-media}
+      MAIL_HOST: mailpit
+      MAIL_PORT: 1025
+    ports: ["8080:8080"]
+    profiles: ["full"]   # `docker compose --profile full up` when you want the backend containerized too
+
+volumes:
+  pgdata:
+  redisdata:
+  miniodata:

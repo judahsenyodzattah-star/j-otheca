@@ -1,0 +1,66 @@
+spring:
+  application:
+    name: libranet
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/libranet}
+    username: ${SPRING_DATASOURCE_USERNAME:libranet}
+    password: ${SPRING_DATASOURCE_PASSWORD:libranet}
+  jpa:
+    hibernate:
+      ddl-auto: none            # schema comes ONLY from Flyway migrations (spec §41)
+    properties:
+      hibernate.jdbc.time_zone: UTC
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  mail:
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:1025}
+  servlet:
+    multipart:
+      max-file-size: 12MB          # gateway backstop; the service-level cap is stricter
+      max-request-size: 12MB
+
+app:
+  jwt-secret: ${APP_JWT_SECRET:}        # must be >= 48 chars; empty fails fast outside dev
+  access-token-ttl-minutes: 15
+  refresh-token-ttl-days: 14
+  rate-limit-auth-per-minute: 30
+  rate-limit:
+    backend: ${RATE_LIMIT_BACKEND:memory}   # memory (single node) | redis (multi-instance; set SPRING_DATA_REDIS_*)
+  security:
+    login-max-attempts: ${LOGIN_MAX_ATTEMPTS:10}       # failed logins before lockout
+    login-lockout-minutes: ${LOGIN_LOCKOUT_MINUTES:15}
+  public-base-url: ${PUBLIC_BASE_URL:https://libranet.app}
+  cors-allowed-origin-patterns: ${CORS_ORIGINS:*}
+  media:
+    max-file-bytes: ${MEDIA_MAX_FILE_BYTES:8388608}   # 8 MB per upload, hard per-file cap
+  storage:
+    provider: ${STORAGE_PROVIDER:memory}  # memory (dev/test) | minio (staging/prod)
+    endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+    access-key: ${MINIO_ACCESS_KEY:libranet}
+    secret-key: ${MINIO_SECRET_KEY:libranet-dev}
+    bucket: ${MINIO_BUCKET:libranet-media}
+
+  ai:
+    embedder: ${AI_EMBEDDER:local}            # local (offline, deterministic) | openai
+    search:
+      backend: ${AI_SEARCH_BACKEND:java}      # java (portable cosine) | pgvector (ANN, real PG)
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs
+
+management:
+  # the Redis health indicator only makes sense when rate-limiting actually uses Redis;
+  # with the default memory backend there is no server and the probe would be a false DOWN
+  health:
+    redis:
+      enabled: ${REDIS_HEALTH_ENABLED:false}
+
+  endpoints:
+    web:
+      exposure:
+        include: health

@@ -1,0 +1,29 @@
+# ---- build outputs ----
+target/
+build/
+out/
+dist/
+# ---- deps / caches ----
+node_modules/
+.venv/
+**/.DS_Store
+# ---- flutter / dart ----
+mobile/.dart_tool/
+mobile/build/
+mobile/.flutter-plugins*
+mobile/.packages
+# ---- java ----
+*.class
+*.jar
+!.mvn/wrapper/maven-wrapper.jar
+# ---- ide ----
+.idea/
+*.iml
+.vscode/
+!.vscode/settings.json   # shared: disables noisy JDT null-analysis (codebase is javac-clean)
+# ---- env & secrets ----
+.env
+*.env
+!*.env.example
+# ---- misc ----
+*.log
