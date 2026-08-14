@@ -13,7 +13,7 @@ final _publicAuthorProvider =
   return Map<String, dynamic>.from(res.data as Map);
 });
 
-/// The shareable author page (E16 — /app/authors/<slug>). Anonymous-friendly. Renders
+/// The shareable author page (E16 — /app/authors/`<slug>`). Anonymous-friendly. Renders
 /// ONLY what the API returns, which is itself only the opted-in fields — the legal
 /// account identity is structurally absent from this payload.
 class AuthorPublicPage extends ConsumerWidget {
