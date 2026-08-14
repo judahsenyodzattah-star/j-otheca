@@ -77,6 +77,14 @@ public class Book extends TenantScopedEntity {
     @Column(name = "author_user_id", length = 36)
     private String authorUserId;
 
+    /**
+     * E18 (audit P3): link to the author's public capability profile — the identity behind
+     * the public author page and studio aggregates. {@code authorUserId} remains the legacy
+     * personal-library pointer; both stay optional.
+     */
+    @Column(name = "author_profile_id", length = 36)
+    private String authorProfileId;
+
     /** Physical-sale sticker price in minor units; NULL = this title is not for sale here. */
     @Column(name = "sale_price_minor")
     private Long salePriceMinor;
@@ -123,6 +131,8 @@ public class Book extends TenantScopedEntity {
     public void setPublished(boolean published) { this.published = published; }
     public String getAuthorUserId() { return authorUserId; }
     public void setAuthorUserId(String authorUserId) { this.authorUserId = authorUserId; }
+    public String getAuthorProfileId() { return authorProfileId; }
+    public void setAuthorProfileId(String authorProfileId) { this.authorProfileId = authorProfileId; }
     public Long getSalePriceMinor() { return salePriceMinor; }
     public void setSalePriceMinor(Long salePriceMinor) { this.salePriceMinor = salePriceMinor; }
     public String getContactNote() { return contactNote; }

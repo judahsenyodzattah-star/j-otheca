@@ -30,6 +30,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import com.libranet.permissions.model.LibraryPerm;
+import com.libranet.permissions.service.PermissionService;
 
 /**
  * Media pipeline (Phase 7): content-sniffed upload → variant generation → object storage →
@@ -61,11 +63,15 @@ public class MediaService {
     private final AuditService audit;
     private final long maxFileBytes;
 
+        private final PermissionService permissions;
+
     public MediaService(MediaObjectRepository media, StorageService storage,
                         EntitlementService entitlements, StorageUsageService storageUsage,
                         BookRepository books,
                         LibraryRepository libraries, UserRepository users, AuditService audit,
-                        @Value("${app.media.max-file-bytes:8388608}") long maxFileBytes) {
+                        @Value("${app.media.max-file-bytes:8388608}") long maxFileBytes,
+                        PermissionService permissions) {
+        this.permissions = permissions;
         this.media = media;
         this.storage = storage;
         this.entitlements = entitlements;
@@ -82,8 +88,7 @@ public class MediaService {
     /** Staff: replace a book's cover image. */
     @Transactional
     public MediaDto attachBookCover(String bookId, MultipartFile file) {
-        TenantContext.Current ctx = TenantGuard.requireRole(
-                LibraryRole.LIBRARY_ADMIN.name(), LibraryRole.LIBRARIAN.name());
+        TenantContext.Current ctx = permissions.require(LibraryPerm.CATALOG_MANAGE);
         Book book = books.findById(bookId)
                 .orElseThrow(() -> ApiException.notFound("BOOK_NOT_FOUND", "Book not found"));
         TenantGuard.requireBelongsToCurrentTenant(book.getTenantId());
@@ -176,7 +181,7 @@ public class MediaService {
     /** Staff: soft-delete a media object and detach every reference to it within the tenant. */
     @Transactional
     public void delete(String id) {
-        TenantGuard.requireRole(LibraryRole.LIBRARY_ADMIN.name(), LibraryRole.LIBRARIAN.name());
+        permissions.require(LibraryPerm.CATALOG_MANAGE);
         MediaObject m = activeMedia(id);
         stringTenantGuard(m);
         books.findByTenantIdAndCoverRef(m.getTenantId(), id).forEach(b -> b.setCoverRef(null));

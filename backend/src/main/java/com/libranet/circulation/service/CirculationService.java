@@ -41,6 +41,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
+import com.libranet.permissions.model.LibraryPerm;
+import com.libranet.permissions.service.PermissionService;
 
 /**
  * Desk circulation: issue / return / renew, member-card lookup, and the machinery that keeps the
@@ -62,11 +64,15 @@ public class CirculationService {
     private final AuditService audit;
     private final TransactionTemplate sweepTemplate;
 
+        private final PermissionService permissions;
+
     public CirculationService(LoanRepository loans, LoanPolicyRepository policies,
                               ReservationRepository reservations, BookCopyRepository copies,
                               BookRepository books, MembershipRepository memberships, UserRepository users,
                               FineService fines, NotificationService notifications, AuditService audit,
-                              PlatformTransactionManager txManager) {
+                              PlatformTransactionManager txManager,
+                            PermissionService permissions) {
+        this.permissions = permissions;
         this.loans = loans;
         this.policies = policies;
         this.reservations = reservations;
@@ -91,8 +97,8 @@ public class CirculationService {
 
     @Transactional
     public PolicyDto updatePolicy(UpdatePolicyRequest req) {
-        String tenantId = TenantGuard.requireRole(LibraryRole.LIBRARY_ADMIN.name()).libraryId();
-        LoanPolicy p = policyFor(tenantId);
+        TenantContext.Current ctx = permissions.require(LibraryPerm.POLICY_MANAGE);
+        LoanPolicy p = policyFor(ctx.libraryId());
         if (req.loanDays() != null) p.setLoanDays(req.loanDays());
         if (req.renewDays() != null) p.setRenewDays(req.renewDays());
         if (req.maxActiveLoans() != null) p.setMaxActiveLoans(req.maxActiveLoans());
@@ -120,8 +126,7 @@ public class CirculationService {
 
     @Transactional
     public LoanDto issue(IssueLoanRequest req) {
-        TenantContext.Current ctx = TenantGuard.requireRole(
-                LibraryRole.LIBRARY_ADMIN.name(), LibraryRole.LIBRARIAN.name());
+        TenantContext.Current ctx = permissions.require(LibraryPerm.CIRCULATION_OPS);
         Membership member = resolveMember(ctx.libraryId(), req.membershipId(), req.membershipNumber());
         requireBorrowable(member);
         BookCopy copy = resolveCopy(ctx.libraryId(), req.copyId(), req.barcode());
@@ -176,8 +181,7 @@ public class CirculationService {
 
     @Transactional
     public LoanDto returnByCopy(ReturnLoanRequest req) {
-        TenantContext.Current ctx = TenantGuard.requireRole(
-                LibraryRole.LIBRARY_ADMIN.name(), LibraryRole.LIBRARIAN.name());
+        TenantContext.Current ctx = permissions.require(LibraryPerm.CIRCULATION_OPS);
         BookCopy copy = resolveCopy(ctx.libraryId(), req.copyId(), req.barcode());
         Loan loan = loans.findByTenantIdAndCopyIdAndStatus(ctx.libraryId(), copy.getId(), Loan.Status.ACTIVE)
                 .orElseThrow(() -> ApiException.notFound("LOAN_NOT_FOUND", "No active loan for this copy"));
@@ -186,8 +190,7 @@ public class CirculationService {
 
     @Transactional
     public LoanDto returnByLoan(String loanId) {
-        TenantGuard.requireRole(
-                LibraryRole.LIBRARY_ADMIN.name(), LibraryRole.LIBRARIAN.name());
+        permissions.require(LibraryPerm.CIRCULATION_OPS);
         Loan loan = findScopedLoan(loanId);
         if (loan.getStatus() != Loan.Status.ACTIVE) {
             throw ApiException.conflict("LOAN_NOT_ACTIVE", "This loan is already closed");
@@ -280,8 +283,7 @@ public class CirculationService {
 
     @Transactional(readOnly = true)
     public MemberLookupDto lookupMember(String membershipNumber) {
-        TenantContext.Current ctx = TenantGuard.requireRole(
-                LibraryRole.LIBRARY_ADMIN.name(), LibraryRole.LIBRARIAN.name());
+        TenantContext.Current ctx = permissions.require(LibraryPerm.CIRCULATION_OPS);
         Membership member = memberships.findByTenantIdAndMembershipNumber(ctx.libraryId(),
                         membershipNumber == null ? "" : membershipNumber.trim().toUpperCase())
                 .orElseThrow(() -> ApiException.notFound("MEMBER_NOT_FOUND", "No member with this card number"));

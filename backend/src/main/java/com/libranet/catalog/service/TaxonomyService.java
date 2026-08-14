@@ -28,6 +28,8 @@ import java.util.stream.Collectors;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.libranet.permissions.model.LibraryPerm;
+import com.libranet.permissions.service.PermissionService;
 
 /** Categories (tree), branches and shelf locations. Reads: any member; writes: staff. */
 @Service
@@ -41,9 +43,13 @@ public class TaxonomyService {
     private final EntitlementService entitlements;
     private final AuditService audit;
 
+        private final PermissionService permissions;
+
     public TaxonomyService(CategoryRepository categories, BranchRepository branches,
                            ShelfLocationRepository shelfLocations, BookRepository books,
-                           BookCopyRepository copies, EntitlementService entitlements, AuditService audit) {
+                           BookCopyRepository copies, EntitlementService entitlements, AuditService audit,
+                            PermissionService permissions) {
+        this.permissions = permissions;
         this.categories = categories;
         this.branches = branches;
         this.shelfLocations = shelfLocations;
@@ -76,8 +82,7 @@ public class TaxonomyService {
 
     @Transactional
     public CategoryNodeDto createCategory(UpsertCategoryRequest req) {
-        String tenantId = TenantGuard.requireRole(
-                LibraryRole.LIBRARY_ADMIN.name(), LibraryRole.LIBRARIAN.name()).libraryId();
+        String tenantId = permissions.require(LibraryPerm.CATALOG_MANAGE).libraryId();
         Category category = new Category();
         category.setTenantId(tenantId);
         applyCategory(category, req, null);
@@ -92,7 +97,7 @@ public class TaxonomyService {
 
     @Transactional
     public CategoryNodeDto updateCategory(String categoryId, UpsertCategoryRequest req) {
-        TenantGuard.requireRole(LibraryRole.LIBRARY_ADMIN.name(), LibraryRole.LIBRARIAN.name());
+        permissions.require(LibraryPerm.CATALOG_MANAGE);
         Category category = findScopedCategory(categoryId);
         applyCategory(category, req, categoryId);
         try {
@@ -107,8 +112,7 @@ public class TaxonomyService {
 
     @Transactional
     public void deleteCategory(String categoryId) {
-        String tenantId = TenantGuard.requireRole(
-                LibraryRole.LIBRARY_ADMIN.name(), LibraryRole.LIBRARIAN.name()).libraryId();
+        String tenantId = permissions.require(LibraryPerm.CATALOG_MANAGE).libraryId();
         Category category = findScopedCategory(categoryId);
         if (categories.existsByTenantIdAndParentId(tenantId, categoryId)) {
             throw ApiException.conflict("CATEGORY_HAS_CHILDREN", "Move or delete the sub-categories first");
@@ -157,8 +161,7 @@ public class TaxonomyService {
 
     @Transactional
     public BranchDto createBranch(UpsertBranchRequest req) {
-        String tenantId = TenantGuard.requireRole(
-                LibraryRole.LIBRARY_ADMIN.name(), LibraryRole.LIBRARIAN.name()).libraryId();
+        String tenantId = permissions.require(LibraryPerm.CATALOG_MANAGE).libraryId();
         entitlements.requireBranchCapacity(tenantId, () -> branches.countByTenantId(tenantId));
         Branch branch = new Branch();
         branch.setTenantId(tenantId);
@@ -174,7 +177,7 @@ public class TaxonomyService {
 
     @Transactional
     public BranchDto updateBranch(String branchId, UpsertBranchRequest req) {
-        TenantGuard.requireRole(LibraryRole.LIBRARY_ADMIN.name(), LibraryRole.LIBRARIAN.name());
+        permissions.require(LibraryPerm.CATALOG_MANAGE);
         Branch branch = findScopedBranch(branchId);
         applyBranch(branch, req);
         try {
@@ -188,8 +191,7 @@ public class TaxonomyService {
 
     @Transactional
     public void deleteBranch(String branchId) {
-        String tenantId = TenantGuard.requireRole(
-                LibraryRole.LIBRARY_ADMIN.name(), LibraryRole.LIBRARIAN.name()).libraryId();
+        String tenantId = permissions.require(LibraryPerm.CATALOG_MANAGE).libraryId();
         Branch branch = findScopedBranch(branchId);
         if (copies.countByTenantIdAndBranchId(tenantId, branchId) > 0) {
             throw ApiException.conflict("BRANCH_HAS_COPIES", "Reassign or remove this branch's copies first");
@@ -235,8 +237,7 @@ public class TaxonomyService {
 
     @Transactional
     public ShelfLocationDto createShelfLocation(UpsertShelfLocationRequest req) {
-        String tenantId = TenantGuard.requireRole(
-                LibraryRole.LIBRARY_ADMIN.name(), LibraryRole.LIBRARIAN.name()).libraryId();
+        String tenantId = permissions.require(LibraryPerm.CATALOG_MANAGE).libraryId();
         Branch branch = findScopedBranch(req.branchId().trim());
         ShelfLocation location = new ShelfLocation();
         location.setTenantId(tenantId);
@@ -254,7 +255,7 @@ public class TaxonomyService {
 
     @Transactional
     public ShelfLocationDto updateShelfLocation(String locationId, UpsertShelfLocationRequest req) {
-        TenantGuard.requireRole(LibraryRole.LIBRARY_ADMIN.name(), LibraryRole.LIBRARIAN.name());
+        permissions.require(LibraryPerm.CATALOG_MANAGE);
         ShelfLocation location = findScopedShelf(locationId);
         Branch branch = findScopedBranch(req.branchId().trim());
         applyShelf(location, req);
@@ -271,7 +272,7 @@ public class TaxonomyService {
 
     @Transactional
     public void deleteShelfLocation(String locationId) {
-        TenantGuard.requireRole(LibraryRole.LIBRARY_ADMIN.name(), LibraryRole.LIBRARIAN.name());
+        permissions.require(LibraryPerm.CATALOG_MANAGE);
         ShelfLocation location = findScopedShelf(locationId);
         if (copies.countByTenantIdAndShelfLocationId(location.getTenantId(), locationId) > 0) {
             throw ApiException.conflict("LOCATION_HAS_COPIES", "Reassign or remove this location's copies first");

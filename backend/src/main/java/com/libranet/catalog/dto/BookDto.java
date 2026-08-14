@@ -25,6 +25,7 @@ public record BookDto(
         int ratingCount,
         boolean published,
         String authorUserId,
+        String authorProfileId,
         Long salePriceMinor,
         String contactNote,
         long totalCopies,
@@ -38,7 +39,7 @@ public record BookDto(
                 b.getCoAuthors(), b.getIsbn(), b.getPublisher(), b.getPublishedDate(), b.getEdition(),
                 b.getLanguage(), b.getPageCount(), b.getDescription(), b.getSubjects(), b.getCategoryId(),
                 categoryName, b.getCoverRef(), b.getRatingAvg(), b.getRatingCount(), b.isPublished(),
-                b.getAuthorUserId(), b.getSalePriceMinor(), b.getContactNote(),
+                b.getAuthorUserId(), b.getAuthorProfileId(), b.getSalePriceMinor(), b.getContactNote(),
                 a.total(), a.available(),
                 b.getCreatedAt() == null ? null : b.getCreatedAt().toString(),
                 b.getUpdatedAt() == null ? null : b.getUpdatedAt().toString());

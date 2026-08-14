@@ -24,7 +24,7 @@ mvn -DskipTests package        # rebuild, then run the java -jar line again
 **Before committing / handing in:**
 
 ```bash
-mvn verify                     # all 120 tests must stay green
+mvn verify                     # all 151 tests must stay green
 ```
 
 ## B. Dev day + Flutter app (optional)

@@ -164,7 +164,8 @@ function isStaff(){ const r = active()?.role; return r==='LIBRARY_ADMIN' || r===
 function isLibAdmin(){ return active()?.role === 'LIBRARY_ADMIN'; }
 
 const RENDERERS = { home:renderHome, discover:renderDiscover, catalog:renderCatalog, mybooks:renderMyBooks,
-                    ai:renderAi, desk:renderDesk, manage:renderManage, platform:renderPlatform };
+                    ai:renderAi, desk:renderDesk, manage:renderManage, platform:renderPlatform,
+                    support:renderSupport, author:renderAuthor };
 
 function buildTabs(){
   let tabs;
@@ -172,6 +173,8 @@ function buildTabs(){
     tabs = [['platform','🏛 Platform console']];          // SUPER_ADMIN never does library ops (by design)
   } else if (S.memberships.length) {
     tabs = [['home','Home'],['discover','Discover'],['catalog','Catalog'],['mybooks','My books'],['ai','✨ AI discovery']];
+    tabs.push(['support','🛟 Support']);                 // audit P2: every member gets the lane
+    tabs.push(['author','✍️ Author']);                   // audit P3: capability on the same account
     if (isStaff())    tabs.push(['desk','🛠 Circulation desk']);
     if (isLibAdmin()) tabs.push(['manage','🧭 Manage library']);
     if (isSuperAdmin()) tabs.push(['platform','🏛 Platform']);
@@ -356,6 +359,12 @@ async function renderManage(){
         <option value="SUSPENDED">Suspended</option><option value="REJECTED">Rejected</option></select>
         <span class="sub" style="margin:0">Approve the joins patrons request from Discover.</span></div>
       <div id="members" style="margin-top:8px">Loading…</div></div>
+    <div class="card"><h3>🛡️ Staff permissions</h3>
+      <p class="sub">Admins always hold every permission; tune what each librarian may do (audit P4·E19).</p>
+      <div id="staffperms" style="margin-top:8px">Loading…</div></div>
+    <div class="card"><h3>💳 Billing & invoices</h3>
+      <div id="billing"><p class="sub">Loading…</p></div>
+      <div id="invoices" style="margin-top:6px"></div></div>
     <div class="grid">
       <div class="card"><h3>➕ Add a book</h3><div class="form2">
         <div class="full"><label class="f">Title *</label><input id="nb-title" type="text"></div>
@@ -379,7 +388,7 @@ async function renderManage(){
         <div id="nc-res"></div>
         <h3 style="margin-top:18px">📜 Loan policy</h3><div id="policy">Loading…</div></div>
     </div>`;
-  loadDash(); loadMembers(); loadPolicy();
+  loadDash(); loadMembers(); loadPolicy(); loadStaffPerms(); loadBilling();
 }
 async function loadDash(){ try { const d = await api('/api/v1/tenant/analytics/dashboard');
   dash.innerHTML = Object.entries(d).filter(([,v])=>typeof v==='number').map(([k,v])=>
@@ -407,6 +416,61 @@ async function mAct(id, act){ try { await api(`/api/v1/tenant/members/${id}/${ac
   catch(e){ alert(e.message + (e.code?` [${e.code}]`:'')); } }
 async function mRole(id, role){ try { await api(`/api/v1/tenant/members/${id}/role`, {method:'POST',
   headers:{'Content-Type':'application/json'}, body: JSON.stringify({role})}); loadMembers(); }
+  catch(e){ alert(e.message + (e.code?`[${e.code}]`:'')); } }
+
+// ---------- staff permissions (audit P4·E19) ----------
+async function loadStaffPerms(){
+  try {
+    const cat = await api('/api/v1/tenant/permissions/catalog');
+    const p = await api('/api/v1/tenant/members?status=APPROVED&size=50');
+    const staff = (p.content||[]).filter(m=>m.role==='LIBRARIAN');
+    if(!staff.length){ staffperms.innerHTML = '<p class="sub">No librarians yet — promote an approved member from the table above.</p>'; return; }
+    const rows = [];
+    for(const m of staff){
+      const v = await api(`/api/v1/tenant/permissions/staff/${m.id}`);
+      rows.push(`<tr><td><b>${esc(m.fullName||'')}</b><br><span class="sub">${esc(m.email||'')}</span></td>
+        <td>${cat.map(c=>{const on=(v.effective||[]).includes(c.key);const ov=(v.overrides||[]).find(o=>o.perm===c.key);
+          return `<label class="sub" style="display:inline-flex;gap:3px;align-items:center;margin:2px 8px 2px 0">
+            <input type="checkbox" data-mid="${m.id}" data-perm="${c.key}" ${on?'checked':''} onchange="permDirty=true">
+            ${esc(c.label)}${ov?'<b title="overridden" style="color:#e07b00">*</b>':''}</label>`;}).join('')}</td>
+        <td><button class="mini green" onclick="savePerms('${m.id}')">Save</button></td></tr>`);
+    }
+    staffperms.innerHTML = `<table class="t"><tr><th>Librarian</th><th>Effective permissions (* = overridden)</th><th></th></tr>${rows.join('')}</table>
+      <p class="sub">Saving stores one override row per deviation from the librarian default; everything else resets.</p>`;
+  } catch(e){ staffperms.innerHTML = `<p class="err">${esc(e.message)}</p>`; }
+}
+async function savePerms(mid){
+  try {
+    const cat = await api('/api/v1/tenant/permissions/catalog');
+    const boxes = document.querySelectorAll(`input[data-mid="${mid}"]`);
+    const overrides = [...boxes].map(b=>{
+      const def = cat.find(c=>c.key===b.dataset.perm);
+      return {perm: b.dataset.perm, granted: (b.checked === !!(def&&def.librarianDefault)) ? null : b.checked};
+    });
+    await api(`/api/v1/tenant/permissions/staff/${mid}`, {method:'PUT',
+      headers:{'Content-Type':'application/json'}, body: JSON.stringify({overrides})});
+    loadStaffPerms();
+  } catch(e){ alert(e.message + (e.code?` [${e.code}]`:'')); }
+}
+
+// ---------- tenant billing (audit P4·E20) ----------
+async function loadBilling(){
+  try {
+    const s = await api('/api/v1/tenant/billing/subscription');
+    billing.innerHTML = `<p class="sub">Plan <b>${esc(s.planCode||'—')}</b> · renews ${esc((s.periodEnd||'').slice(0,10))}
+      · ${s.daysRemaining??'—'} day(s) left · storage add-on ${s.storageAddonGb??0} GB
+      <button class="mini" onclick="renewSub()" style="margin-left:8px">Renew now</button></p>`;
+    const pay = await api('/api/v1/tenant/billing/payments');
+    const rows = Array.isArray(pay)?pay:(pay.items||pay.payments||pay.content||[]);
+    invoices.innerHTML = rows.length ? `<table class="t"><tr><th>Reference</th><th>Kind</th><th>Amount</th><th>Status</th><th>When</th></tr>` +
+      rows.map(r=>`<tr><td>${esc(r.reference||'')}</td><td>${pretty(r.paymentKind||r.kind||'PAYMENT')}</td>
+        <td>GH₵ ${((r.amountMinor||0)/100).toFixed(2)}</td><td>${statusChip(r.status)}</td>
+        <td class="sub">${esc((r.createdAt||'').replace('T',' ').slice(0,16))}</td></tr>`).join('') + `</table>`
+      : '<p class="sub">No payments yet — renewal checkout appears here once created.</p>';
+  } catch(e){ billing.innerHTML = `<p class="err">${esc(e.message)}</p>`; }
+}
+async function renewSub(){ try { const r = await api('/api/v1/tenant/billing/renew', {method:'POST'});
+  alert(`Renewal checkout created · ref ${r.reference||''} · GH₵ ${((r.amountMinor||0)/100).toFixed(2)}`); loadBilling(); }
   catch(e){ alert(e.message + (e.code?` [${e.code}]`:'')); } }
 async function addBook(){
   nb_res.innerHTML='';
@@ -438,6 +502,281 @@ async function savePolicy(){ pol_res.innerHTML='';
   } catch(e){ pol_res.innerHTML = `<p class="err">⛔ ${esc(e.message)}${e.code?` [${e.code}]`:''}</p>`; } }
 
 /* ------------------------------ platform owner console ------------------------------ */
+
+/* ------------------------------ support lane (audit P2 — spec §17–§23) ------------------------------ */
+
+const ISSUE_CATS = [['ACCOUNT_ACCESS','Account & sign-in'],['MEMBERSHIP','Membership'],['LOANS','Loans & returns'],
+                    ['PAYMENTS','Payments & fines'],['TECHNICAL','App / technical'],['OTHER','Something else']];
+const ISSUE_FILTERS = [['','All'],['OPEN','Open'],['NEEDS_INFO','Needs info'],['IN_PROGRESS','In progress'],
+                       ['ESCALATED','Escalated'],['RESOLVED','Resolved']];
+function issueChip(s){ const c = s==='OPEN'?'amber' : s==='NEEDS_INFO'?'red' : s==='IN_PROGRESS'?'gray'
+                     : s==='ESCALATED'?'red' : 'green';
+  return `<span class="chip ${c}">${pretty(s)}</span>`; }
+
+async function renderSupport(){
+  const v = el('view');
+  if (isStaff()) v.innerHTML = supportStaffShell(); else v.innerHTML = supportPatronShell();
+  if (isStaff()) { el('supFilter').onchange = loadInbox; await loadInbox(); }
+  else await loadMine();
+}
+
+function supportPatronShell(){
+  return `<div class="card">
+    <h2>Support — ${esc(active()?.libraryName || 'this library')}</h2>
+    <p class="sub">Report a problem and follow the thread here. Every issue gets a tracking number
+       (LN-000123); the library team answers in the same thread. Nothing is sent until you say so.</p>
+    <div class="form2">
+      <div><label class="f">What is it about?</label>
+        <select id="supCat" style="width:100%">${ISSUE_CATS.map(c=>`<option value="${c[0]}">${c[1]}</option>`).join('')}</select></div>
+      <div><label class="f">One-line summary</label><input type="text" id="supSubj" maxlength="200"></div>
+      <div class="full"><label class="f">What happened? (your own words — identity comes from your membership, we never re-ask)</label>
+        <textarea id="supDesc" rows="4" maxlength="10000"></textarea></div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button class="b" onclick="submitIssue('APP')">Send to the library</button>
+      <button class="o" onclick="draftIssue()">✨ Draft with the assistant</button>
+      <span class="sub" id="supErr" style="color:var(--red)"></span>
+    </div>
+  </div>
+  <div class="card"><h3>My issues</h3><div id="supList"><p class="sub">Loading…</p></div></div>`;
+}
+
+function supportStaffShell(){
+  return `<div class="card">
+    <h2>Support inbox</h2>
+    <p class="sub">Triage member reports. Internal notes never reach the member; resolve/info
+       actions notify them automatically.</p>
+    <div class="row"><label class="f">Status</label>
+      <select id="supFilter">${ISSUE_FILTERS.map(f=>`<option value="${f[0]}">${f[1]}</option>`).join('')}</select>
+    </div>
+    <div id="supList" style="margin-top:10px"><p class="sub">Loading…</p></div>
+  </div>
+  <div id="supDetail"></div>`;
+}
+
+async function issueClientKey(){ return 'web-'+Date.now()+'-'+Math.random().toString(36).slice(2,8); }
+
+async function draftIssue(){
+  const desc = el('supDesc').value.trim();
+  el('supErr').textContent = '';
+  if (desc.length < 10){ el('supErr').textContent = 'Describe what happened first (10+ characters).'; return; }
+  try {
+    // spec §20: the assistant DRAFTS — the member reviews and only then we POST with source=AI.
+    const d = await api('/api/v1/tenant/ai/issues/draft', {method:'POST',
+      headers:{'Content-Type':'application/json'}, body: JSON.stringify({description: desc})});
+    el('supCat').value = d.category;
+    el('supSubj').value = d.subject;
+    el('supDesc').value = d.description;                       // echoed verbatim — never fabricated
+    el('supErr').style.color = 'var(--green)';
+    el('supErr').textContent = 'Drafted from your words — review the category + summary, then press Send.';
+  } catch(e){ el('supErr').textContent = e.message; }
+}
+
+async function submitIssue(source){
+  const body = {category: el('supCat').value, subject: el('supSubj').value.trim(),
+                description: el('supDesc').value.trim(), clientKey: await issueClientKey()};
+  if (source === 'AI') body.source = 'AI';
+  el('supErr').style.color = 'var(--red)'; el('supErr').textContent = '';
+  if (!body.subject || body.description.length < 10){
+    el('supErr').textContent = 'Give a summary and 10+ characters of detail.'; return; }
+  try {
+    const issue = await api('/api/v1/tenant/issues', {method:'POST',
+      headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+    el('supSubj').value=''; el('supDesc').value='';
+    await loadMine();
+    el('supErr').style.color='var(--green)';
+    el('supErr').textContent = 'Filed as '+issue.ref+' — the library team has it.';
+  } catch(e){ el('supErr').textContent = e.message; }
+}
+
+async function loadMine(){
+  const j = await api('/api/v1/tenant/issues/me');
+  const rows = j.content || [];
+  el('supList').innerHTML = rows.length ? rows.map(i => `
+    <div class="tr"><div class="grow">
+      <div class="t">${esc(i.ref)} — ${esc(i.subject)}</div>
+      <div class="s">${issueChip(i.status)} ${esc(pretty(i.category))}${i.source==='AI'?' · ✨ AI-drafted':''}
+        ${i.assigneeName?' · with '+esc(i.assigneeName):''}</div>
+    </div><button class="mini" onclick="loadThread('${i.id}','${i.ref}',false)">Open</button></div>`).join('')
+    : '<p class="sub">Nothing on file — issues you open appear here.</p>';
+}
+
+async function loadInbox(){
+  const f = el('supFilter')?.value || '';
+  const j = await api('/api/v1/tenant/issues/inbox' + (f ? '?status='+f : ''));
+  const rows = j.content || [];
+  el('supList').innerHTML = rows.length ? rows.map(i => `
+    <div class="tr"><div class="grow">
+      <div class="t">${esc(i.ref)} — ${esc(i.subject)}</div>
+      <div class="s">${issueChip(i.status)} ${esc(pretty(i.category))} · P:${esc((i.priority||'').toLowerCase())}
+        · ${esc(i.reporterName||'')}${i.assigneeName?' → '+esc(i.assigneeName):''}</div>
+    </div><button class="mini" onclick="loadThread('${i.id}','${i.ref}',true)">Work</button></div>`).join('')
+    : '<p class="sub">Inbox zero. Enjoy the quiet.</p>';
+}
+
+async function loadThread(id, ref, staff){
+  let d;
+  try { d = await api('/api/v1/tenant/issues/'+id); }
+  catch(e){ alert(e.message); return; }
+  const msgs = (d.messages||[]).map(m => `
+    <div class="tr"><div class="grow">
+      <div class="s">${esc(m.authorName || (m.system?'LibraNet assistant':'Member'))}
+        ${m.internal?'<span class="chip red">internal</span>':''}${m.staffAuthored?'<span class="chip">staff</span>':''}</div>
+      <div>${esc(m.body)}</div>
+    </div><div class="s">${when(m.createdAt)}</div></div>`).join('');
+  const staffBar = staff ? `<div class="row" style="margin:10px 0">
+      <button class="mini" onclick="issueAct('${id}','assign',{assigneeMembershipId:'me'})">Assign to me</button>
+      <button class="mini" onclick="issueActPrompt('${id}','request-info','Ask the member for what? (sent to them)')">Request info</button>
+      <button class="mini green" onclick="issueActPrompt('${id}','resolve','Resolution the member will see?')">Resolve</button>
+      <button class="mini red" onclick="issueActPrompt('${id}','escalate','Why escalate? (staff-only note)')">Escalate</button>
+      <button class="mini" onclick="issueAct('${id}','reopen')">Reopen</button>
+      <select id="supPrio" onchange="issueAct('${id}','priority',{priority:this.value})">
+        ${['LOW','NORMAL','HIGH','URGENT'].map(p=>`<option ${d.issue.priority===p?'selected':''}>${p}</option>`).join('')}
+      </select>
+    </div>
+    <label class="f"><input type="checkbox" id="supInternal" style="width:auto"> internal note (staff only)</label>` : '';
+  const target = staff ? el('supDetail') : el('view');
+  const html = `<div class="card">
+    <h2>${esc(ref)} — ${esc(d.issue.subject)}</h2>
+    <p class="sub">${issueChip(d.issue.status)} ${esc(pretty(d.issue.category))}
+      · opened ${when(d.issue.createdAt)}${d.issue.resolvedAt?' · resolved '+when(d.issue.resolvedAt):''}</p>
+    <div class="note">${esc(d.description)}</div>
+    ${msgs || '<p class="sub" style="margin-top:8px">No messages yet.</p>'}
+    ${staffBar}
+    <div class="row" style="margin-top:10px">
+      <input type="text" class="grow" id="supReply" maxlength="10000" placeholder="Write a reply…">
+      <button class="b" onclick="sendIssueReply('${id}','${ref}',${staff})">Send</button>
+    </div>
+    ${staff?'':'<div class="row" style="margin-top:8px"><button class="o" onclick="show(\'support\')">← Back to my issues</button></div>'}
+  </div>`;
+  if (staff) target.innerHTML = html; else target.innerHTML = supportPatronShell() + html;
+}
+
+async function sendIssueReply(id, ref, staff){
+  const body = {body: el('supReply').value.trim()};
+  if (!body.body) return;
+  if (staff && el('supInternal')?.checked) body.internal = true;
+  try { await api('/api/v1/tenant/issues/'+id+'/messages', {method:'POST',
+        headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+    await loadThread(id, ref, staff); }
+  catch(e){ alert(e.message); }
+}
+
+async function issueAct(id, action, body){
+  try { await api(`/api/v1/tenant/issues/${id}/${action}`, {method:'POST',
+        headers:{'Content-Type':'application/json'}, body: JSON.stringify(body||{})});
+    await loadInbox(); el('supDetail').innerHTML=''; }
+  catch(e){ alert(e.message); }
+}
+async function issueActPrompt(id, action, hint){
+  const note = prompt(hint); if (note == null) return;
+  await issueAct(id, action, {note});
+}
+
+/* ------------------------------ author capability (audit P3 — E15–E18) ------------------------------ */
+
+async function renderAuthor(){
+  const v = el('view');
+  let p = null;
+  try { p = await api('/api/v1/me/author-profile', {}, true); } catch(e) { /* 404 = not opened */ }
+  if (!p) {
+    v.innerHTML = `<div class="card" style="max-width:520px;margin:40px auto">
+      <h2>Are you an author?</h2>
+      <p class="sub">Open an author profile on this same account — pen name fronts everything,
+         your account name never goes public. Publish the page only when you're ready.</p>
+      <label class="f">Pen name</label>
+      <input type="text" id="apPen" maxlength="120">
+      <div class="row" style="margin-top:10px">
+        <button class="b" onclick="authorCreate()">Open my author profile</button>
+        <span class="err" id="apErr"></span>
+      </div>
+    </div>`;
+    return;
+  }
+  let studio = null;
+  try { studio = await api('/api/v1/me/author-studio', {}, true); } catch(e) {}
+  const t = studio?.totals || {};
+  const links = (p.languages||[]).concat(p.genres||[]).map(x=>`<span class="chip gray">${esc(x)}</span>`).join('');
+  v.innerHTML = `<div class="card">
+    <h2>✍️ ${esc(p.penName)}</h2>
+    <p class="sub">${p.publicProfile ? `Public page live at <code>/app/authors/${esc(p.slug)}</code> — anon API: <code>/api/v1/public/authors/${esc(p.slug)}</code>`
+        : 'Public page is off — only you can see this.'}</p>
+    <div>${links}</div>
+    <p class="sub" style="margin-top:6px">${esc(p.bio || '')}</p>
+    <div class="form2" style="margin-top:8px">
+      <div><label class="f">Pen name</label><input type="text" id="apPen" value="${esc(p.penName)}"></div>
+      <div><label class="f">Country</label><input type="text" id="apCountry" value="${esc(p.country||'')}"></div>
+      <div class="full"><label class="f">Bio</label><textarea id="apBio" rows="3" maxlength="2000">${esc(p.bio||'')}</textarea></div>
+      <div><label class="f">Languages (CSV)</label><input type="text" id="apLang" value="${esc((p.languages||[]).join(', '))}"></div>
+      <div><label class="f">Genres (CSV)</label><input type="text" id="apGenres" value="${esc((p.genres||[]).join(', '))}"></div>
+      <div><label class="f">Public contact email (optional)</label><input type="text" id="apEmail" value="${esc(p.publicEmail||'')}"></div>
+      <div><label class="f">Photo URL</label><input type="text" id="apPhoto" value="${esc(p.photoUrl||'')}"></div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <label class="f" style="margin:0"><input type="checkbox" id="apPublic" ${p.publicProfile?'checked':''} style="width:auto"> publish my public page</label>
+      <button class="b" onclick="authorSave()">Save profile</button>
+      <span id="apErr" class="err"></span>
+    </div>
+  </div>
+  <div class="card">
+    <h3>Studio</h3>
+    <div class="kpi">
+      <div class="k"><b>${t.books??0}</b>books</div>
+      <div class="k"><b>${t.interested??0}</b>interested</div>
+      <div class="k"><b>${t.pendingRequests??0}</b>pending sales</div>
+      <div class="k"><b>${t.copiesSold??0}</b>copies sold</div>
+      <div class="k"><b>${money(t.revenueMinor)}</b>revenue</div>
+      <div class="k"><b>${t.ratings??0}</b>ratings</div>
+    </div>
+    ${(studio?.books||[]).map(b=>`<div class="tr"><div class="grow">
+        <div class="t">${esc(b.title)}</div>
+        <div class="s">at ${esc(b.libraryName||'')} · ♥ ${b.interestedCount} · ${b.pendingRequests} pending ·
+          ${b.copiesSold} sold${b.ratingCount?` · ★ ${Number(b.ratingAvg).toFixed(1)} (${b.ratingCount})`:''}</div>
+      </div><div class="score">${b.salePriceMinor!=null?money(b.salePriceMinor):''}</div></div>`).join('')}
+  </div>
+  <div class="card">
+    <h3>Direct selling</h3>
+    <p class="sub">${p.sellingEnabled
+        ? `On — payouts to ${esc(p.payoutMomoNetwork||'MoMo')} ${esc(p.payoutMomoMasked||'')}.`
+        : 'Off. MoMo payout details are collected only when you activate — never at registration.'}</p>
+    ${p.sellingEnabled
+        ? `<button class="o" onclick="authorSelling(false)">Pause selling</button>`
+        : `<div class="row"><input type="text" id="apMomo" placeholder="MoMo number (024…)" style="max-width:220px">
+             <select id="apNet"><option>MTN</option><option>TELECEL</option><option>AIRTELTIGO</option></select>
+             <button class="b" onclick="authorSelling(true)">Activate selling</button>
+             <span class="err" id="apSellErr"></span></div>`}
+  </div>`;
+}
+
+async function authorCreate(){
+  const pen = el('apPen').value.trim();
+  try {
+    await api('/api/v1/me/author-profile', {method:'PUT', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({penName: pen})}, true);
+    renderAuthor();
+  } catch(e){ el('apErr').textContent = e.message; }
+}
+
+async function authorSave(){
+  try {
+    await api('/api/v1/me/author-profile', {method:'PUT', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({penName: el('apPen').value.trim(), bio: el('apBio').value.trim(),
+        country: el('apCountry').value.trim(), languages: el('apLang').value.trim(),
+        genres: el('apGenres').value.trim(), photoUrl: el('apPhoto').value.trim(),
+        publicEmail: el('apEmail').value.trim(), publicProfile: el('apPublic').checked})}, true);
+    renderAuthor();
+  } catch(e){ el('apErr').textContent = e.message; }
+}
+
+async function authorSelling(on){
+  if (!on) { await api('/api/v1/me/author-profile/deactivate-selling', {method:'POST'}, true); renderAuthor(); return; }
+  try {
+    await api('/api/v1/me/author-profile/activate-selling', {method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({momoNumber: el('apMomo').value.trim(), momoNetwork: el('apNet').value})}, true);
+    renderAuthor();
+  } catch(e){ el('apSellErr').textContent = e.message; }
+}
 
 async function renderPlatform(){
   whoLib.classList.add('hidden');

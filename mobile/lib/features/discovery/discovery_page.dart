@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/api_client.dart';
 import '../../core/models.dart';
 import '../../core/session.dart';
+import '../../core/widgets/role_nav.dart';
 
 final _apiProvider = Provider((ref) => ApiClient(baseUrl: ApiClient.defaultBaseUrl()));
 
@@ -42,7 +43,12 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage> {
   Widget build(BuildContext context) {
     final memberships = ref.watch(_membershipsProvider);
     final libraries = ref.watch(_librariesProvider(_query));
+    final session = ref.watch(sessionProvider);
     return Scaffold(
+      bottomNavigationBar: RoleNavBar(
+        current: 'discover',
+        items: roleNavItems(session.activeRole, isSuperAdmin: session.isSuperAdmin),
+      ),
       appBar: AppBar(
         title: const Text('Discover Libraries'),
         actions: [

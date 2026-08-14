@@ -16,7 +16,7 @@ class LibraNetApp extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       theme: LibraTheme.light(),
       darkTheme: LibraTheme.dark(),
-      themeMode: ThemeMode.system,
+      themeMode: ref.watch(themeModeProvider),
       routerConfig: router,
     );
   }

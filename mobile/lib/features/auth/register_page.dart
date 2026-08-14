@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/api_client.dart';
+import '../../core/widgets/password_field.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -14,6 +15,7 @@ class _RegisterPageState extends State<RegisterPage> {
   final _email = TextEditingController();
   final _name = TextEditingController();
   final _password = TextEditingController();
+  final _confirm = TextEditingController();
   bool _busy = false;
   String? _error;
 
@@ -60,11 +62,19 @@ class _RegisterPageState extends State<RegisterPage> {
                   validator: (v) => (v == null || !v.contains('@')) ? 'Enter a valid email' : null,
                 ),
                 const SizedBox(height: 16),
-                TextFormField(
+                PasswordField(
                   controller: _password,
-                  obscureText: true,
-                  decoration: const InputDecoration(labelText: 'Password (min 10 characters)'),
+                  label: 'Password (min 10 characters)',
+                  autofillHints: const [AutofillHints.newPassword],
                   validator: (v) => (v == null || v.length < 10) ? 'At least 10 characters' : null,
+                ),
+                const SizedBox(height: 16),
+                // Independent eye toggle per field (audit P0·E2 — spec rule #9).
+                PasswordField(
+                  controller: _confirm,
+                  label: 'Confirm password',
+                  autofillHints: const [AutofillHints.newPassword],
+                  validator: (v) => v != _password.text ? 'Passwords do not match' : null,
                 ),
                 if (_error != null) ...[
                   const SizedBox(height: 12),
@@ -72,6 +82,12 @@ class _RegisterPageState extends State<RegisterPage> {
                 ],
                 const SizedBox(height: 24),
                 FilledButton(onPressed: _busy ? null : _submit, child: const Text('Create account')),
+                const SizedBox(height: 12),
+                TextButton.icon(
+                  icon: const Icon(Icons.domain_add_outlined),
+                  onPressed: () => context.go('/register-library'),
+                  label: const Text('Registering a library? Go to library onboarding'),
+                ),
               ]),
             ),
           ),

@@ -28,6 +28,8 @@ import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.libranet.permissions.model.LibraryPerm;
+import com.libranet.permissions.service.PermissionService;
 
 /**
  * Reservation lifecycle (spec §21):
@@ -52,11 +54,15 @@ public class ReservationService {
     private final NotificationService notifications;
     private final AuditService audit;
 
+        private final PermissionService permissions;
+
     public ReservationService(ReservationRepository reservations, BookRepository books,
                               BookCopyRepository copies, MembershipRepository memberships,
                               UserRepository users, CirculationService circulation,
                               EntitlementService entitlements, NotificationService notifications,
-                              AuditService audit) {
+                              AuditService audit,
+                            PermissionService permissions) {
+        this.permissions = permissions;
         this.reservations = reservations;
         this.books = books;
         this.copies = copies;
@@ -133,10 +139,25 @@ public class ReservationService {
 
     // ---------- staff desk actions ----------
 
+    /**
+     * Holds are desk work: staff need CIRCULATION_OPS (audit P4·E19), but a member is always
+     * allowed to act on their OWN in-flight reservation (self-service hold management).
+     */
+    private TenantContext.Current requireDeskOrOwner(String reservationId) {
+        TenantContext.Current ctx = TenantContext.require();
+        if (ctx.hasAnyRole(LibraryRole.LIBRARY_ADMIN.name(), LibraryRole.LIBRARIAN.name())) {
+            return permissions.require(LibraryPerm.CIRCULATION_OPS); // may throw PERMISSION_DENIED
+        }
+        Reservation r = findScoped(reservationId);
+        if (!r.getMembershipId().equals(ctx.membershipId())) {
+            throw ApiException.notFound("RESERVATION_NOT_FOUND", "Reservation not found"); // invisibility
+        }
+        return ctx;
+    }
+
     @Transactional
     public ReservationDto markReady(String reservationId) {
-        TenantContext.Current ctx = TenantGuard.requireRole(
-                LibraryRole.LIBRARY_ADMIN.name(), LibraryRole.LIBRARIAN.name());
+        TenantContext.Current ctx = requireDeskOrOwner(reservationId);
         circulation.expireOverdueReservations();
         Reservation r = findScoped(reservationId);
         if (r.getStatus() != Reservation.Status.WAITING_FOR_PICKUP) {
@@ -156,8 +177,7 @@ public class ReservationService {
     /** Desk collection: converts the hold into a real loan (RESERVED shelf copy becomes BORROWED). */
     @Transactional
     public LoanDto collect(String reservationId) {
-        TenantContext.Current ctx = TenantGuard.requireRole(
-                LibraryRole.LIBRARY_ADMIN.name(), LibraryRole.LIBRARIAN.name());
+        TenantContext.Current ctx = requireDeskOrOwner(reservationId);
         circulation.expireOverdueReservations();
         Reservation r = findScoped(reservationId);
         if (r.getStatus() == Reservation.Status.WAITING_FOR_PICKUP) {
@@ -196,7 +216,7 @@ public class ReservationService {
 
     @Transactional(readOnly = true)
     public List<ReservationDto> listForBook(String bookId) {
-        TenantGuard.requireRole(LibraryRole.LIBRARY_ADMIN.name(), LibraryRole.LIBRARIAN.name());
+        permissions.require(LibraryPerm.REPORTS_VIEW);
         Book book = books.findById(bookId)
                 .orElseThrow(() -> ApiException.notFound("BOOK_NOT_FOUND", "Book not found"));
         TenantGuard.requireBelongsToCurrentTenant(book.getTenantId());
@@ -207,8 +227,7 @@ public class ReservationService {
 
     @Transactional(readOnly = true)
     public List<ReservationDto> readyShelf() {
-        TenantContext.Current ctx = TenantGuard.requireRole(
-                LibraryRole.LIBRARY_ADMIN.name(), LibraryRole.LIBRARIAN.name());
+        TenantContext.Current ctx = permissions.require(LibraryPerm.CIRCULATION_OPS);
         return reservations.findByTenantIdAndStatusOrderByCreatedAtAsc(
                         ctx.libraryId(), Reservation.Status.READY_FOR_PICKUP)
                 .stream().map(this::decorate).toList();

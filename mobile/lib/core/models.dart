@@ -9,12 +9,13 @@ class AuthTokens {
 }
 
 class AppUser {
-  AppUser({required this.id, required this.email, required this.fullName, required this.globalRole, required this.emailVerified});
+  AppUser({required this.id, required this.email, required this.fullName, required this.globalRole, required this.emailVerified, this.phone});
   final String id;
   final String email;
   final String fullName;
   final String globalRole;
   final bool emailVerified;
+  final String? phone;
 
   factory AppUser.fromJson(Map<String, dynamic> j) => AppUser(
         id: j['id'] as String,
@@ -22,6 +23,7 @@ class AppUser {
         fullName: j['fullName'] as String,
         globalRole: j['globalRole'] as String,
         emailVerified: j['emailVerified'] as bool,
+        phone: j['phone'] as String?,
       );
 }
 

@@ -19,6 +19,8 @@ import java.util.Map;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.libranet.permissions.model.LibraryPerm;
+import com.libranet.permissions.service.PermissionService;
 
 /**
  * Demand insights (Phase 10): acquisition intelligence from three grounded signals —
@@ -43,9 +45,13 @@ public class DemandInsightsService {
     private final AiQuotaService quota;
     private final AuditService audit;
 
+        private final PermissionService permissions;
+
     public DemandInsightsService(BookInterestRepository interests, ReservationRepository reservations,
                                  SearchEventRepository searchEvents, BookRepository books,
-                                 AiQuotaService quota, AuditService audit) {
+                                 AiQuotaService quota, AuditService audit,
+                            PermissionService permissions) {
+        this.permissions = permissions;
         this.interests = interests;
         this.reservations = reservations;
         this.searchEvents = searchEvents;
@@ -56,8 +62,7 @@ public class DemandInsightsService {
 
     @Transactional
     public DemandInsights insights() {
-        TenantContext.Current ctx = TenantGuard.requireRole(
-                LibraryRole.LIBRARY_ADMIN.name(), LibraryRole.LIBRARIAN.name());
+        TenantContext.Current ctx = permissions.require(LibraryPerm.REPORTS_VIEW);
         String tenantId = ctx.libraryId();
         AiQuotaService.UsageView usage = quota.require(tenantId, AiUsageCounter.Feature.DEMAND_INSIGHTS);
 

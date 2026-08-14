@@ -18,6 +18,17 @@ class SessionState {
   /// Approved memberships drive the "which libraries can I act in" picker.
   List<MyMembership> get approved => memberships.where((m) => m.isApproved).toList();
 
+  /// Role within the ACTIVE library membership, or null when none is selected.
+  String? get activeRole {
+    for (final m in approved) {
+      if (m.libraryUid == activeLibraryUid) return m.role;
+    }
+    return null;
+  }
+
+  /// Platform SUPER_ADMIN (global role) — never a library role (spec §2/§5).
+  bool get isSuperAdmin => user?.globalRole == 'SUPER_ADMIN';
+
   SessionState copyWith({String? accessToken, String? refreshToken, AppUser? user,
       String? activeLibraryUid, List<MyMembership>? memberships}) {
     return SessionState(
@@ -59,7 +70,8 @@ class SessionController extends Notifier<SessionState> {
       'accessToken': tokens.accessToken,
       'refreshToken': tokens.refreshToken,
       'user': {'id': user.id, 'email': user.email, 'fullName': user.fullName,
-               'globalRole': user.globalRole, 'emailVerified': user.emailVerified},
+               'globalRole': user.globalRole, 'emailVerified': user.emailVerified,
+               'phone': user.phone},
     }));
   }
 
@@ -82,6 +94,21 @@ class SessionController extends Notifier<SessionState> {
   }
 
   void switchLibrary(String uid) => state = state.copyWith(activeLibraryUid: uid);
+
+  /// Persist an updated profile (settings → Account → edit).
+  Future<void> updateUser(AppUser user) async {
+    state = state.copyWith(user: user);
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_key);
+    if (raw == null) return;
+    final j = jsonDecode(raw) as Map<String, dynamic>;
+    j['user'] = {
+      'id': user.id, 'email': user.email, 'fullName': user.fullName,
+      'globalRole': user.globalRole, 'emailVerified': user.emailVerified,
+      'phone': user.phone,
+    };
+    await prefs.setString(_key, jsonEncode(j));
+  }
 
   Future<void> signOut() async {
     state = const SessionState();

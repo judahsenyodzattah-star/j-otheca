@@ -94,6 +94,28 @@ class TenantIsolationTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    // ---------- audit P2: support-issues lane enters through the same gates ----------
+
+    @Test
+    void issuesInboxRejectsSpoofedTenantHeader() throws Exception {
+        String libadmin = TestApi.login(mvc, "libadmin@libranet.app", "Library12345!");
+        mvc.perform(get("/api/v1/tenant/issues/inbox")
+                        .header("Authorization", TestApi.bearer(libadmin))
+                        .header("X-Library-Id", DevDataSeeder.ACCRA_UID))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void issuesRejectMissingAuthAndMissingTenant() throws Exception {
+        mvc.perform(get("/api/v1/tenant/issues/me")
+                        .header("X-Library-Id", DevDataSeeder.PENTECOST_UID))
+                .andExpect(status().isUnauthorized());
+        String libadmin = TestApi.login(mvc, "libadmin@libranet.app", "Library12345!");
+        mvc.perform(get("/api/v1/tenant/issues/me")
+                        .header("Authorization", TestApi.bearer(libadmin)))
+                .andExpect(status().isBadRequest());
+    }
+
     // ---------- layer: data filtering ----------
 
     @Test

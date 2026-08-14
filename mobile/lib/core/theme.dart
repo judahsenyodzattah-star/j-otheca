@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Restrained, modern theme (spec §38: Stripe/Linear/Notion feel).
 /// Light + dark from one brand seed; no visual noise.
@@ -20,3 +21,7 @@ abstract final class LibraTheme {
     );
   }
 }
+
+/// Appearance setting (audit P1·E6 — spec §9.1): session-scoped theme override.
+/// Persistence arrives with the Appearance deep-dive; default stays system.
+final themeModeProvider = StateProvider<ThemeMode>((ref) => ThemeMode.system);

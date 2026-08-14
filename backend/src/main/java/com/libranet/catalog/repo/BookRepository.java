@@ -14,6 +14,11 @@ public interface BookRepository extends JpaRepository<Book, String>, JpaSpecific
 
     Optional<Book> findByTenantIdAndSlug(String tenantId, String slug);
 
+    /** E18/E17: author-profile linkage read in /me and public contexts (no tenant filter armed). */
+    List<Book> findByAuthorProfileId(String authorProfileId);
+
+    List<Book> findByAuthorProfileIdAndPublishedTrue(String authorProfileId);
+
     long countByTenantIdAndCategoryId(String tenantId, String categoryId);
 
     long countByTenantId(String tenantId);

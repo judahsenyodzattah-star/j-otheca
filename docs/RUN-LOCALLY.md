@@ -32,7 +32,7 @@ java -jar target/libranet-backend-0.1.0-SNAPSHOT.jar --spring.profiles.active=de
 - App + web UI: **http://localhost:8080/**
 - Health: `http://localhost:8080/actuator/health` → `{"status":"UP"}`
 - Mail (dev): SMTP stub on port 1025 (invites/receipts logged, nothing sent)
-- Full test suite: `mvn verify` → expect **120/120 green**
+- Full test suite: `mvn verify` → expect **151/151 green**
 
 ## 3. Flutter client
 

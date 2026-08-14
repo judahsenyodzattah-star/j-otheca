@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/api_client.dart';
 import '../../core/session.dart';
+import '../../core/widgets/role_nav.dart';
 
 final _apiProvider = Provider((ref) => ApiClient(baseUrl: ApiClient.defaultBaseUrl()));
 
@@ -38,8 +39,13 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
   @override
   Widget build(BuildContext context) {
     final results = ref.watch(_resultsProvider);
+    final session = ref.watch(sessionProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('Catalog')),
+      bottomNavigationBar: RoleNavBar(
+        current: 'catalog',
+        items: roleNavItems(session.activeRole, isSuperAdmin: session.isSuperAdmin),
+      ),
       body: Column(children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),

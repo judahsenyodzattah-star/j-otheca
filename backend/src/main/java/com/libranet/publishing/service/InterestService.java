@@ -18,6 +18,8 @@ import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.libranet.permissions.model.LibraryPerm;
+import com.libranet.permissions.service.PermissionService;
 
 /** Reader interest marks ("I want this") and the staff demand view. Members write; staff read. */
 @Service
@@ -29,9 +31,13 @@ public class InterestService {
     private final UserRepository users;
     private final NotificationService notifications;
 
+        private final PermissionService permissions;
+
     public InterestService(BookInterestRepository interests, BookRepository books,
                            MembershipRepository memberships, UserRepository users,
-                           NotificationService notifications) {
+                           NotificationService notifications,
+                            PermissionService permissions) {
+        this.permissions = permissions;
         this.interests = interests;
         this.books = books;
         this.memberships = memberships;
@@ -81,8 +87,7 @@ public class InterestService {
     /** Staff: demand list for a title (who wants it). */
     @Transactional(readOnly = true)
     public List<InterestedMemberDto> interestedMembers(String bookId) {
-        TenantContext.Current ctx = TenantGuard.requireRole(
-                LibraryRole.LIBRARY_ADMIN.name(), LibraryRole.LIBRARIAN.name());
+        TenantContext.Current ctx = permissions.require(LibraryPerm.REPORTS_VIEW);
         findVisibleBook(ctx, bookId);
         return interests.findByTenantIdAndBookId(ctx.libraryId(), bookId).stream().map(i -> {
             var member = memberships.findById(i.getMembershipId()).orElse(null);

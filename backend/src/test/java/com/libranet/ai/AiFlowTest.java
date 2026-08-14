@@ -225,10 +225,35 @@ class AiFlowTest {
     // ---------- 6-7: guarded assistant ----------
 
     @Test @Order(6)
-    void patronsCannotUseTheAssistant() throws Exception {
+    void patronAssistantAnswersMembershipScopedIntents() throws Exception {
+        // my-loans intent — scoped to the reader's own membership; they hold no active loan
         mvc.perform(api(post("/api/v1/tenant/ai/assistant/ask"), reader)
-                        .content("{\"question\":\"what should we buy?\"}"))
-                .andExpect(status().isForbidden());
+                        .content("{\"question\":\"when are my books due?\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.intent").value("MY_LOANS"))
+                .andExpect(jsonPath("$.answer")
+                        .value(org.hamcrest.Matchers.containsString("nothing on loan")));
+
+        // policy intent — grounded in the library's real loan-policy row
+        mvc.perform(api(post("/api/v1/tenant/ai/assistant/ask"), reader)
+                        .content("{\"question\":\"how long can I keep a book and is there a fine?\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.intent").value("POLICY"));
+
+        // staff-metric wording from a patron: polite redirect, never the numbers (spec §15)
+        MvcResult r = mvc.perform(api(post("/api/v1/tenant/ai/assistant/ask"), reader)
+                        .content("{\"question\":\"what should we buy more copies of?\"}"))
+                .andExpect(status().isOk()).andReturn();
+        JsonNode body = TestApi.readJson(r);
+        assertThat(body.path("intent").asText()).isEqualTo("STAFF_VIEW");
+        assertThat(body.path("answer").asText()).doesNotContain("Machine Learning Basics");
+
+        // patrons also get the grounded search fallback with citations
+        mvc.perform(api(post("/api/v1/tenant/ai/assistant/ask"), reader)
+                        .content("{\"question\":\"do we have anything about databases?\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.intent").value("SEARCH"))
+                .andExpect(jsonPath("$.citations[0].title").value("Database Systems Explained"));
     }
 
     @Test @Order(7)
@@ -336,5 +361,53 @@ class AiFlowTest {
         // back to normal immediately — data, not code
         mvc.perform(api(get("/api/v1/tenant/ai/search?q=java"), admin))
                 .andExpect(status().isOk());
+    }
+
+    @Test @Order(11)
+    void issueDraftNeverCreatesUntilTheReporterConfirms() throws Exception {
+        // audit P2 (spec §20): the assistant DRAFTS from the member's own words — verbatim,
+        // keyword-classified, confirmationRequired=true permanently — and writes NOTHING.
+        String words = "I was charged GHS 50 twice for a lost book fine after I already paid. "
+                + "Please refund one payment.";
+        MvcResult draft = mvc.perform(api(post("/api/v1/tenant/ai/issues/draft"), reader)
+                        .content("{\"description\":\"" + words + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.confirmationRequired").value(true))
+                .andExpect(jsonPath("$.category").value("PAYMENTS"))
+                .andExpect(jsonPath("$.description").value(words))   // echoed verbatim, never mutated
+                .andReturn();
+        String subject = TestApi.readJson(draft).path("subject").asText();
+        assertThat(subject).startsWith("I was charged");
+        Integer rows = jdbc.queryForObject("SELECT COUNT(*) FROM issues WHERE tenant_id = ?",
+                Integer.class, tenantId);
+        assertThat(rows).isZero();                                    // drafting created nothing
+
+        // only the reporter's explicit confirm (client posts source=AI) opens the issue
+        MvcResult created = mvc.perform(api(post("/api/v1/tenant/issues"), reader)
+                        .content("{\"category\":\"PAYMENTS\",\"subject\":\"" + subject.replace("\"", "'")
+                                + "\",\"description\":\"" + words + "\",\"source\":\"AI\","
+                                + "\"clientKey\":\"ai-confirm-1\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.source").value("AI"))
+                .andExpect(jsonPath("$.status").value("OPEN"))
+                .andReturn();
+        assertThat(TestApi.readJson(created).path("ref").asText()).matches("LN-\\d{6}");
+        rows = jdbc.queryForObject("SELECT COUNT(*) FROM issues WHERE tenant_id = ?",
+                Integer.class, tenantId);
+        assertThat(rows).isEqualTo(1);
+
+        // the chat lane steers problem reports at the draft, with no fabrication promise
+        mvc.perform(api(post("/api/v1/tenant/ai/assistant/ask"), reader)
+                        .content("{\"question\":\"I need help — something is broken with my account\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.intent").value("REPORT_ISSUE"))
+                .andExpect(jsonPath("$.answer").value(org.hamcrest.Matchers.containsString("confirm")));
+
+        // staff side sees the inbox in words too
+        mvc.perform(api(post("/api/v1/tenant/ai/assistant/ask"), admin)
+                        .content("{\"question\":\"Any support tickets waiting on us?\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.intent").value("SUPPORT_INBOX"))
+                .andExpect(jsonPath("$.answer").value(org.hamcrest.Matchers.containsString("1 open")));
     }
 }

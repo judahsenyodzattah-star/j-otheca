@@ -1,6 +1,7 @@
 package com.libranet.publishing.repo;
 
 import com.libranet.publishing.model.PurchaseRequest;
+import java.util.Collection;
 import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -11,6 +12,9 @@ public interface PurchaseRequestRepository extends JpaRepository<PurchaseRequest
 
     List<PurchaseRequest> findByTenantIdAndStatusOrderByCreatedAtAsc(String tenantId,
                                                                      PurchaseRequest.Status status);
+
+    /** E17: studio aggregates across libraries — profiles are user-global, never tenant-bound. */
+    List<PurchaseRequest> findByBookIdIn(Collection<String> bookIds);
 
     boolean existsByTenantIdAndBookIdAndMembershipIdAndStatus(String tenantId, String bookId,
                                                               String membershipId,

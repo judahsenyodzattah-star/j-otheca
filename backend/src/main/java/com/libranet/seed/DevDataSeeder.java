@@ -1,5 +1,7 @@
 package com.libranet.seed;
 
+import com.libranet.authors.model.AuthorProfile;
+import com.libranet.authors.repo.AuthorProfileRepository;
 import com.libranet.billing.model.LibrarySubscription;
 import com.libranet.billing.model.SubscriptionPlan;
 import com.libranet.billing.repo.LibrarySubscriptionRepository;
@@ -76,6 +78,7 @@ public class DevDataSeeder implements ApplicationRunner {
     private final BookCopyRepository copies;
     private final LoanRepository loans;
     private final NotificationRepository notifications;
+    private final AuthorProfileRepository authorProfiles;
     private final PasswordEncoder encoder;
     private final String superAdminPassword;
 
@@ -84,7 +87,8 @@ public class DevDataSeeder implements ApplicationRunner {
                          LibrarySubscriptionRepository subscriptions, CategoryRepository categories,
                          BranchRepository branches, ShelfLocationRepository shelfLocations,
                          BookRepository books, BookCopyRepository copies, LoanRepository loans,
-                         NotificationRepository notifications, PasswordEncoder encoder,
+                         NotificationRepository notifications, AuthorProfileRepository authorProfiles,
+                         PasswordEncoder encoder,
                          @Value("${SEED_SUPER_ADMIN_PASSWORD:Admin12345!}") String superAdminPassword) {
         this.users = users;
         this.libraries = libraries;
@@ -99,6 +103,7 @@ public class DevDataSeeder implements ApplicationRunner {
         this.copies = copies;
         this.loans = loans;
         this.notifications = notifications;
+        this.authorProfiles = authorProfiles;
         this.encoder = encoder;
         this.superAdminPassword = superAdminPassword;
     }
@@ -191,7 +196,23 @@ public class DevDataSeeder implements ApplicationRunner {
                 "Sankofa Press", "2024",
                 "A market woman in Makola hears every secret in Accra — and one she was never meant to keep.",
                 new String[][]{{"AW-000001", null}, {"AW-000002", null}}, null);
+        // Audit P3 (E15/E18): the demo author also carries the author capability — a public
+        // profile (pen name, NEVER the legal one) with both seeded books linked to it.
+        AuthorProfile profile = new AuthorProfile();
+        profile.setUserId(author.getId());
+        profile.setSlug("auntie-esi");
+        profile.setPenName("Auntie Esi");
+        profile.setBio("Ghanaian novelist writing the Accra she grew up in — markets after "
+                + "dusk, compounds at dawn, and the people who hold both together.");
+        profile.setCountry("Ghana");
+        profile.setLanguages("English, Twi");
+        profile.setGenres("Literary fiction, Short stories");
+        profile.setAuthorType(AuthorProfile.AuthorType.INDIE.name());
+        profile.setPublicProfile(true);
+        authorProfiles.save(profile);
+
         whispers.setAuthorUserId(author.getId());
+        whispers.setAuthorProfileId(profile.getId());
         whispers.setSalePriceMinor(35000L); // GH₵350.00
         whispers.setContactNote("Signed by the author at pickup.");
         books.save(whispers);
@@ -201,6 +222,7 @@ public class DevDataSeeder implements ApplicationRunner {
                 "Eleven interlocking short stories set between Osu and Jamestown after dark.",
                 new String[][]{{"AW-000003", null}}, null);
         night.setAuthorUserId(author.getId());
+        night.setAuthorProfileId(profile.getId());
         books.save(night);
     }
 

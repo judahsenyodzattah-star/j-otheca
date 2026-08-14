@@ -19,6 +19,8 @@ import java.util.Map;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.libranet.permissions.model.LibraryPerm;
+import com.libranet.permissions.service.PermissionService;
 
 /** Tenant-plane billing self-service (Phase 9): subscription view, renewals, storage add-ons. */
 @Service
@@ -43,11 +45,15 @@ public class TenantBillingService {
     private final UserRepository users;
     private final long addonPricePerGbMinor;
 
+        private final PermissionService permissions;
+
     public TenantBillingService(LibrarySubscriptionRepository subscriptions, SubscriptionPlanRepository plans,
                                 com.libranet.billing.repo.PaymentRepository payments,
                                 EntitlementService entitlements, PaymentService paymentService,
                                 UserRepository users,
-                                @Value("${app.billing.storage-addon-price-per-gb-minor:1000}") long addonPricePerGbMinor) {
+                                @Value("${app.billing.storage-addon-price-per-gb-minor:1000}") long addonPricePerGbMinor,
+                                PermissionService permissions) {
+        this.permissions = permissions;
         this.subscriptions = subscriptions;
         this.plans = plans;
         this.payments = payments;
@@ -102,7 +108,7 @@ public class TenantBillingService {
     }
 
     private TenantContext.Current admin() {
-        return TenantGuard.requireRole(LibraryRole.LIBRARY_ADMIN.name());
+        return permissions.require(LibraryPerm.BILLING_MANAGE);
     }
 
     private User currentUser() {

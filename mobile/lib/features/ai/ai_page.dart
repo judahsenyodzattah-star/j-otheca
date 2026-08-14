@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import '../../core/api_client.dart';
 import '../../core/models.dart';
 import '../../core/session.dart';
+import '../../core/widgets/role_nav.dart';
+import '../issues/issue_draft_dialog.dart';
 
 final _apiProvider = Provider((ref) => ApiClient(baseUrl: ApiClient.defaultBaseUrl()));
 
@@ -72,7 +74,9 @@ final _demandProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref) a
 });
 
 /// Phase-10 AI surface (spec §16/§32): semantic catalog search with explanations,
-/// per-member recommendations, and — for staff — the guarded assistant plus demand insights.
+/// per-member recommendations, and the grounded assistant (audit P1·E8/E9 — spec §15/§16:
+/// patrons get membership-scoped MY_LOANS/MY_HOLDS/LIBRARY_INFO/POLICY/SEARCH intents;
+/// staff additionally get demand/overdue/top-rated metrics plus demand insights).
 class AiPage extends ConsumerStatefulWidget {
   const AiPage({super.key});
 
@@ -92,6 +96,19 @@ class _AiPageState extends ConsumerState<AiPage> {
     _searchController.dispose();
     _askController.dispose();
     super.dispose();
+  }
+
+  /// Quick-action chips (spec §16): preset questions through the same grounded pipeline.
+  void _askPreset(String q) {
+    _askController.text = q;
+    _ask();
+  }
+
+  String _greeting() {
+    final h = DateTime.now().hour;
+    if (h < 12) return 'Good morning';
+    if (h < 17) return 'Good afternoon';
+    return 'Good evening';
   }
 
   Future<void> _ask() async {
@@ -129,17 +146,56 @@ class _AiPageState extends ConsumerState<AiPage> {
     final demand = ref.watch(_demandProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          tooltip: 'Home',
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go('/home'),
-        ),
-        title: const Text('AI discovery'),
+      appBar: AppBar(title: const Text('LibraNet AI')),
+      bottomNavigationBar: RoleNavBar(
+        current: 'ai',
+        items: roleNavItems(session.activeRole, isSuperAdmin: session.isSuperAdmin),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          // Greeting + quick actions (audit P1·E9 — spec §16): more than a blank chatbot.
+          Text('${_greeting()}, ${session.user?.fullName.split(' ').first ?? 'there'} 👋',
+              style: Theme.of(context).textTheme.headlineSmall),
+          const SizedBox(height: 4),
+          Text('How can I help you today?', style: Theme.of(context).textTheme.bodyMedium),
+          const SizedBox(height: 12),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            ActionChip(
+              avatar: const Icon(Icons.search, size: 18),
+              label: const Text('Find a book'),
+              onPressed: () => _askPreset('beginner books available in this library'),
+            ),
+            ActionChip(
+              avatar: const Icon(Icons.menu_book_outlined, size: 18),
+              label: const Text('My loans'),
+              onPressed: () => _askPreset('when are my books due?'),
+            ),
+            ActionChip(
+              avatar: const Icon(Icons.bookmark_outline, size: 18),
+              label: const Text('My holds'),
+              onPressed: () => _askPreset('what holds or reservations do I have?'),
+            ),
+            ActionChip(
+              avatar: const Icon(Icons.schedule_outlined, size: 18),
+              label: const Text('Library info'),
+              onPressed: () => _askPreset('what are the opening hours and where are you located?'),
+            ),
+            ActionChip(
+              avatar: const Icon(Icons.rule_outlined, size: 18),
+              label: const Text('Borrowing rules'),
+              onPressed: () => _askPreset('how long can I keep a book and is there a fine?'),
+            ),
+            ActionChip(
+              avatar: const Icon(Icons.flag_outlined, size: 18),
+              label: const Text('Report an issue'),
+              // audit P2 (spec §20): assistant drafts from the member's own words;
+              // nothing is created until the member confirms the card.
+              onPressed: () => showIssueDraftDialog(context,
+                  seedText: _askController.text.trim().isEmpty ? null : _askController.text.trim()),
+            ),
+          ]),
+          const SizedBox(height: 16),
           for (final u in [usage.valueOrNull])
             if (u != null) _usageChip(u),
           _sectionTitle(context, Icons.travel_explore_outlined, 'Semantic search',
@@ -170,38 +226,43 @@ class _AiPageState extends ConsumerState<AiPage> {
               'From your loans, ratings and want-it marks — never titles you already consumed.'),
           const SizedBox(height: 8),
           _recommendations(recs),
-          if (staff) ...[
-            const SizedBox(height: 24),
-            _sectionTitle(context, Icons.psychology_outlined, 'Ask the assistant',
-                'Staff only. Grounded in this library\'s data — demand, overdue loans, top rated, catalog.'),
-            const SizedBox(height: 8),
-            Row(children: [
-              Expanded(
-                child: TextField(
-                  controller: _askController,
-                  decoration: const InputDecoration(
-                    hintText: 'e.g. what should we buy more copies of?',
-                    border: OutlineInputBorder(),
-                  ),
-                  onSubmitted: (_) => _ask(),
+          // Ask the assistant — everyone (audit P1 · E8 opens the assistant to patrons).
+          const SizedBox(height: 24),
+          _sectionTitle(context, Icons.psychology_outlined, 'Ask the assistant',
+              staff
+                  ? 'Grounded in this library\'s data — demand, overdue loans, top rated, catalog.'
+                  : 'Answers about your loans, holds, this library and its rules — grounded, never guessed.'),
+          const SizedBox(height: 8),
+          Row(children: [
+            Expanded(
+              child: TextField(
+                controller: _askController,
+                decoration: InputDecoration(
+                  hintText: staff
+                      ? 'e.g. what should we buy more copies of?'
+                      : 'e.g. when are my books due?',
+                  border: const OutlineInputBorder(),
                 ),
+                onSubmitted: (_) => _ask(),
               ),
-              const SizedBox(width: 8),
-              FilledButton(
-                onPressed: _asking ? null : _ask,
-                child: const Text('Ask'),
-              ),
-            ]),
-            if (_asking) const Padding(
-              padding: EdgeInsets.only(top: 8),
-              child: LinearProgressIndicator(),
             ),
-            if (_askError != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(_askError!, style: TextStyle(color: Colors.red.shade700)),
-              ),
-            if (_answer != null) _answerCard(_answer!),
+            const SizedBox(width: 8),
+            FilledButton(
+              onPressed: _asking ? null : _ask,
+              child: const Text('Ask'),
+            ),
+          ]),
+          if (_asking) const Padding(
+            padding: EdgeInsets.only(top: 8),
+            child: LinearProgressIndicator(),
+          ),
+          if (_askError != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(_askError!, style: TextStyle(color: Colors.red.shade700)),
+            ),
+          if (_answer != null) _answerCard(_answer!),
+          if (staff) ...[
             const SizedBox(height: 24),
             _sectionTitle(context, Icons.insights_outlined, 'Demand insights',
                 'What members want — before you buy.'),
@@ -387,6 +448,19 @@ class _AiPageState extends ConsumerState<AiPage> {
           ),
           const SizedBox(height: 8),
           Text('${answer['answer']}', style: t.bodyMedium),
+          // audit P2 (spec §20): a problem report turns into a confirm-card draft, never
+          // a silent creation — the member reviews category + words before anything sends.
+          if (answer['intent'] == 'REPORT_ISSUE') ...[
+            const SizedBox(height: 10),
+            FilledButton.tonalIcon(
+              icon: const Icon(Icons.drafts_outlined, size: 18),
+              label: const Text('Draft my issue'),
+              onPressed: () => showIssueDraftDialog(context,
+                  seedText: _askController.text.trim().isEmpty
+                      ? null
+                      : _askController.text.trim()),
+            ),
+          ],
           if (citations.isNotEmpty) ...[
             const SizedBox(height: 8),
             Wrap(spacing: 6, runSpacing: 4, children: [

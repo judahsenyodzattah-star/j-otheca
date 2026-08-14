@@ -41,6 +41,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.libranet.permissions.model.LibraryPerm;
+import com.libranet.permissions.service.PermissionService;
 
 /**
  * Catalog: books + physical copies.
@@ -60,11 +62,15 @@ public class CatalogService {
     private final com.libranet.ai.service.EmbeddingService embeddingService;
     private final com.libranet.ai.service.SearchEventService searchEvents;
 
+        private final PermissionService permissions;
+
     public CatalogService(BookRepository books, BookCopyRepository copies, CategoryRepository categories,
                           BranchRepository branches, ShelfLocationRepository shelfLocations,
                           EntitlementService entitlements, AuditService audit,
                           com.libranet.ai.service.EmbeddingService embeddingService,
-                          com.libranet.ai.service.SearchEventService searchEvents) {
+                          com.libranet.ai.service.SearchEventService searchEvents,
+                            PermissionService permissions) {
+        this.permissions = permissions;
         this.books = books;
         this.copies = copies;
         this.categories = categories;
@@ -150,8 +156,7 @@ public class CatalogService {
 
     @Transactional
     public BookDto create(UpsertBookRequest req) {
-        TenantContext.Current ctx = TenantGuard.requireRole(
-                LibraryRole.LIBRARY_ADMIN.name(), LibraryRole.LIBRARIAN.name());
+        TenantContext.Current ctx = permissions.require(LibraryPerm.CATALOG_MANAGE);
         String tenantId = ctx.libraryId();
         entitlements.requireBookCapacity(tenantId, () -> books.countByTenantId(tenantId));
         requireCategoryBelongsToTenant(tenantId, req.categoryId());
@@ -177,8 +182,7 @@ public class CatalogService {
 
     @Transactional
     public BookDto update(String bookId, UpsertBookRequest req) {
-        TenantContext.Current ctx = TenantGuard.requireRole(
-                LibraryRole.LIBRARY_ADMIN.name(), LibraryRole.LIBRARIAN.name());
+        TenantContext.Current ctx = permissions.require(LibraryPerm.CATALOG_MANAGE);
         String tenantId = ctx.libraryId();
         Book book = findScoped(bookId);
         requireCategoryBelongsToTenant(tenantId, req.categoryId());
@@ -204,7 +208,7 @@ public class CatalogService {
 
     @Transactional
     public void delete(String bookId) {
-        TenantGuard.requireRole(LibraryRole.LIBRARY_ADMIN.name(), LibraryRole.LIBRARIAN.name());
+        permissions.require(LibraryPerm.CATALOG_MANAGE);
         Book book = findScoped(bookId);
         long liveCopies = copies.countByTenantIdAndBookId(book.getTenantId(), bookId);
         if (liveCopies > 0) {
@@ -220,6 +224,7 @@ public class CatalogService {
 
     @Transactional(readOnly = true)
     public List<CopyDto> listCopies(String bookId) {
+        // copy register is a desk read: any staff sees it; only mutations need CATALOG_MANAGE (audit P4·E19)
         TenantGuard.requireRole(LibraryRole.LIBRARY_ADMIN.name(), LibraryRole.LIBRARIAN.name());
         Book book = findScoped(bookId);
         Map<String, Branch> branchById = branches.findByTenantIdOrderByMainDescNameAsc(book.getTenantId())
@@ -234,8 +239,7 @@ public class CatalogService {
 
     @Transactional
     public CopyDto addCopy(String bookId, CreateCopyRequest req) {
-        TenantContext.Current ctx = TenantGuard.requireRole(
-                LibraryRole.LIBRARY_ADMIN.name(), LibraryRole.LIBRARIAN.name());
+        TenantContext.Current ctx = permissions.require(LibraryPerm.CATALOG_MANAGE);
         String tenantId = ctx.libraryId();
         Book book = findScoped(bookId);
         requireBranchBelongsToTenant(tenantId, req.branchId());
@@ -271,7 +275,7 @@ public class CatalogService {
 
     @Transactional
     public CopyDto updateCopy(String copyId, UpdateCopyRequest req) {
-        TenantGuard.requireRole(LibraryRole.LIBRARY_ADMIN.name(), LibraryRole.LIBRARIAN.name());
+        permissions.require(LibraryPerm.CATALOG_MANAGE);
         BookCopy copy = findScopedCopy(copyId);
         String tenantId = copy.getTenantId();
         requireBranchBelongsToTenant(tenantId, req.branchId());
@@ -293,7 +297,7 @@ public class CatalogService {
 
     @Transactional
     public CopyDto changeCopyStatus(String copyId, UpdateCopyStatusRequest req) {
-        TenantGuard.requireRole(LibraryRole.LIBRARY_ADMIN.name(), LibraryRole.LIBRARIAN.name());
+        permissions.require(LibraryPerm.CATALOG_MANAGE);
         BookCopy copy = findScopedCopy(copyId);
         CopyStatus next = parseStatus(req.status());
         // BORROWED/RESERVED are owned by circulation flows (Phase 5) — staff can't set them directly.
@@ -318,7 +322,7 @@ public class CatalogService {
 
     @Transactional
     public void deleteCopy(String copyId) {
-        TenantGuard.requireRole(LibraryRole.LIBRARY_ADMIN.name(), LibraryRole.LIBRARIAN.name());
+        permissions.require(LibraryPerm.CATALOG_MANAGE);
         BookCopy copy = findScopedCopy(copyId);
         if (copy.getStatus() == CopyStatus.BORROWED) {
             throw ApiException.conflict("COPY_IS_BORROWED", "A copy on loan cannot be removed");
@@ -369,6 +373,7 @@ public class CatalogService {
             book.setPublished(req.published());
         }
         book.setAuthorUserId(blankToNull(req.authorUserId()));
+        book.setAuthorProfileId(blankToNull(req.authorProfileId()));
         book.setSalePriceMinor(req.salePriceMinor());
         book.setContactNote(blankToNull(req.contactNote()));
     }

@@ -28,6 +28,8 @@ import java.util.Locale;
 import java.util.Map;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.libranet.permissions.model.LibraryPerm;
+import com.libranet.permissions.service.PermissionService;
 
 /** Charge lifecycle: auto late-fees on return, staff assessments for lost/damaged, settle & waive. */
 @Service
@@ -43,10 +45,14 @@ public class FineService {
     private final AuditService audit;
     private final com.libranet.billing.service.PaymentService payments;
 
+        private final PermissionService permissions;
+
     public FineService(FineRepository fines, LoanRepository loans, LoanPolicyRepository policies,
                        BookCopyRepository copies, MembershipRepository memberships, UserRepository users,
                        NotificationService notifications, AuditService audit,
-                       com.libranet.billing.service.PaymentService payments) {
+                       com.libranet.billing.service.PaymentService payments,
+                        PermissionService permissions) {
+        this.permissions = permissions;
         this.fines = fines;
         this.loans = loans;
         this.policies = policies;
@@ -86,8 +92,7 @@ public class FineService {
 
     @Transactional
     public FineDto assess(AssessFineRequest req) {
-        TenantContext.Current ctx = TenantGuard.requireRole(
-                LibraryRole.LIBRARY_ADMIN.name(), LibraryRole.LIBRARIAN.name());
+        TenantContext.Current ctx = permissions.require(LibraryPerm.FINES_MANAGE);
         Membership member = memberships.findById(req.membershipId())
                 .orElseThrow(() -> ApiException.notFound("MEMBER_NOT_FOUND", "Member not found"));
         TenantGuard.requireBelongsToCurrentTenant(member.getTenantId());
@@ -146,7 +151,7 @@ public class FineService {
 
     @Transactional
     public FineDto settle(String fineId, SettleFineRequest req) {
-        TenantGuard.requireRole(LibraryRole.LIBRARY_ADMIN.name(), LibraryRole.LIBRARIAN.name());
+        permissions.require(LibraryPerm.FINES_MANAGE);
         Fine fine = findScoped(fineId);
         if (fine.getStatus() != Fine.Status.OPEN) {
             throw ApiException.conflict("FINE_NOT_OPEN", "Only open fines can be settled");
@@ -171,7 +176,7 @@ public class FineService {
 
     @Transactional
     public FineDto waive(String fineId, String reason) {
-        TenantGuard.requireRole(LibraryRole.LIBRARY_ADMIN.name()); // waivers are an admin decision
+        permissions.require(LibraryPerm.FINES_WAIVE); // waivers are an admin decision
         Fine fine = findScoped(fineId);
         if (fine.getStatus() != Fine.Status.OPEN) {
             throw ApiException.conflict("FINE_NOT_OPEN", "Only open fines can be waived");

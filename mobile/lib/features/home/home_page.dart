@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/models.dart';
 import '../../core/session.dart';
+import '../../core/widgets/role_nav.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 /// Home for the ACTIVE library: membership picker across global memberships plus the
@@ -22,11 +23,16 @@ class HomePage extends ConsumerWidget {
         title: Text(active?.libraryName ?? 'My libraries'),
         actions: [
           IconButton(
-            tooltip: 'Discover',
-            icon: const Icon(Icons.travel_explore_outlined),
-            onPressed: () => context.go('/discover'),
+            tooltip: 'Settings',
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: () => context.go('/settings'),
           ),
         ],
+      ),
+      // Role-aware tabs (audit P0·E4): staff see Desk, admins additionally see Manage.
+      bottomNavigationBar: RoleNavBar(
+        current: 'home',
+        items: roleNavItems(session.activeRole, isSuperAdmin: session.isSuperAdmin),
       ),
       body: approved.isEmpty
           ? Center(

@@ -25,6 +25,8 @@ import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.libranet.permissions.model.LibraryPerm;
+import com.libranet.permissions.service.PermissionService;
 
 /** Optional physical sales (spec §24): members request, staff hands over a copy at the desk. */
 @Service
@@ -38,9 +40,13 @@ public class PurchaseService {
     private final NotificationService notifications;
     private final AuditService audit;
 
+        private final PermissionService permissions;
+
     public PurchaseService(PurchaseRequestRepository requests, BookRepository books,
                            BookCopyRepository copies, MembershipRepository memberships,
-                           UserRepository users, NotificationService notifications, AuditService audit) {
+                           UserRepository users, NotificationService notifications, AuditService audit,
+                            PermissionService permissions) {
+        this.permissions = permissions;
         this.requests = requests;
         this.books = books;
         this.copies = copies;
@@ -100,8 +106,7 @@ public class PurchaseService {
     /** Staff: hand over a copy and close the sale. The copy leaves circulation (REMOVED, kept for history). */
     @Transactional
     public PurchaseRequestDto fulfill(String requestId, String barcode) {
-        TenantContext.Current ctx = TenantGuard.requireRole(
-                LibraryRole.LIBRARY_ADMIN.name(), LibraryRole.LIBRARIAN.name());
+        TenantContext.Current ctx = permissions.require(LibraryPerm.CIRCULATION_OPS);
         PurchaseRequest r = findScoped(requestId);
         if (r.getStatus() != PurchaseRequest.Status.PENDING) {
             throw ApiException.conflict("REQUEST_CLOSED", "This request is already " + r.getStatus());
@@ -149,8 +154,7 @@ public class PurchaseService {
 
     @Transactional(readOnly = true)
     public List<PurchaseRequestDto> pendingForStaff() {
-        TenantContext.Current ctx = TenantGuard.requireRole(
-                LibraryRole.LIBRARY_ADMIN.name(), LibraryRole.LIBRARIAN.name());
+        TenantContext.Current ctx = permissions.require(LibraryPerm.CIRCULATION_OPS);
         return requests.findByTenantIdAndStatusOrderByCreatedAtAsc(
                         ctx.libraryId(), PurchaseRequest.Status.PENDING)
                 .stream().map(this::decorate).toList();

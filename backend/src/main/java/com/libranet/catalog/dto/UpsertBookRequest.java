@@ -23,5 +23,6 @@ public record UpsertBookRequest(
         @Size(max = 500) String coverRef,
         Boolean published,
         @Size(max = 36) String authorUserId,
+        @Size(max = 36) String authorProfileId,   // E18: link to the author's capability profile
         @Min(0) Long salePriceMinor,
         @Size(max = 300) String contactNote) {}

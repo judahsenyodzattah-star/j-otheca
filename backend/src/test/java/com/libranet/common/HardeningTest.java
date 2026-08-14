@@ -105,7 +105,7 @@ class HardeningTest {
         assertThat(docs.at("/paths/~1api~1v1~1tenant~1ai~1search/get/summary").asText())
                 .isEqualTo("Semantic catalog search");
         assertThat(docs.at("/paths/~1api~1v1~1tenant~1ai~1assistant~1ask/post/summary").asText())
-                .isEqualTo("Guarded librarian assistant");
+                .isEqualTo("Library AI assistant (staff + patrons)");
     }
 
     // ---------- V18 performance indexes ----------

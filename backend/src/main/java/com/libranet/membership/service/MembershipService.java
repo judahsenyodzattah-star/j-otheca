@@ -38,6 +38,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.libranet.permissions.model.LibraryPerm;
+import com.libranet.permissions.service.PermissionService;
 
 @Service
 public class MembershipService {
@@ -49,9 +51,13 @@ public class MembershipService {
     private final AuditService audit;
     private final EntitlementService entitlements;
 
+        private final PermissionService permissions;
+
     public MembershipService(MembershipRepository memberships, InvitationRepository invitations,
                              LibraryRepository libraries, UserRepository users, AuditService audit,
-                             EntitlementService entitlements) {
+                             EntitlementService entitlements,
+                            PermissionService permissions) {
+        this.permissions = permissions;
         this.memberships = memberships;
         this.invitations = invitations;
         this.libraries = libraries;
@@ -212,7 +218,7 @@ public class MembershipService {
 
     @Transactional
     public MemberDto approve(String membershipId) {
-        TenantGuard.requireRole(LibraryRole.LIBRARY_ADMIN.name());
+        permissions.require(LibraryPerm.MEMBERS_MANAGE);
         Membership membership = loadInTenant(membershipId);
         if (membership.getStatus() != MembershipStatus.PENDING) {
             throw ApiException.conflict("NOT_PENDING", "Only pending requests can be approved");
@@ -228,7 +234,7 @@ public class MembershipService {
 
     @Transactional
     public MemberDto reject(String membershipId) {
-        TenantGuard.requireRole(LibraryRole.LIBRARY_ADMIN.name());
+        permissions.require(LibraryPerm.MEMBERS_MANAGE);
         Membership membership = loadInTenant(membershipId);
         if (membership.getStatus() != MembershipStatus.PENDING) {
             throw ApiException.conflict("NOT_PENDING", "Only pending requests can be rejected");
@@ -240,7 +246,7 @@ public class MembershipService {
 
     @Transactional
     public MemberDto suspend(String membershipId) {
-        TenantGuard.requireRole(LibraryRole.LIBRARY_ADMIN.name());
+        permissions.require(LibraryPerm.MEMBERS_MANAGE);
         Membership membership = loadInTenant(membershipId);
         if (membership.getStatus() != MembershipStatus.APPROVED) {
             throw ApiException.conflict("NOT_APPROVED", "Only approved memberships can be suspended");

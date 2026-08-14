@@ -24,6 +24,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import com.libranet.permissions.model.LibraryPerm;
+import com.libranet.permissions.service.PermissionService;
 
 /**
  * AI surface (Phase 10, spec §16/§32). Every feature is plan-metered via AiQuotaService and
@@ -42,10 +44,14 @@ public class TenantAiController {
     private final com.libranet.ai.embed.EmbeddingProvider embedder;
     private final AuditService audit;
 
+        private final PermissionService permissions;
+
     public TenantAiController(SemanticSearchService search, RecommendationService recommendations,
                               AssistantService assistant, DemandInsightsService insights,
                               AiQuotaService quota, EmbeddingService embeddings,
-                              com.libranet.ai.embed.EmbeddingProvider embedder, AuditService audit) {
+                              com.libranet.ai.embed.EmbeddingProvider embedder, AuditService audit,
+                            PermissionService permissions) {
+        this.permissions = permissions;
         this.search = search;
         this.recommendations = recommendations;
         this.assistant = assistant;
@@ -81,17 +87,47 @@ public class TenantAiController {
         return recommendations.recommend(limit);
     }
 
-    /** Guarded librarian assistant (staff only). Answers are grounded in tenant data. */
-    @Operation(summary = "Guarded librarian assistant",
-            description = "Staff only (patrons get 403). Intents DEMAND/OVERDUE/TOP_RATED/SEARCH; answers "
-                    + "are grounded in tenant data with catalog citations. Audit stores the intent and the "
-                    + "question length — never the question text. Metered.")
+    /**
+     * The LibraNet assistant. Staff intents answer with tenant-wide operational metrics;
+     * patrons (audit P1·E8 — spec §15/§16) get the same honesty scoped to their own
+     * membership: my loans, my holds, library info, this library's real loan policy, and
+     * catalog search with citations. Staff-metric wording from a patron returns a polite
+     * STAFF_VIEW redirect — never the data, never a 403 wall.
+     */
+    @Operation(summary = "Library AI assistant (staff + patrons)",
+            description = "Staff: DEMAND/OVERDUE/TOP_RATED/SEARCH intents. Patrons: MY_LOANS/MY_HOLDS/"
+                    + "LIBRARY_INFO/POLICY/SEARCH scoped to their own membership; staff metrics are "
+                    + "never exposed (STAFF_VIEW redirect instead). Audit stores intent + question "
+                    + "length — never the question text. Plan-metered.")
     @PostMapping("/assistant/ask")
     public AssistantResponse ask(@jakarta.validation.Valid @RequestBody AskRequest req) {
-        return assistant.ask(req.question());
+        var ctx = com.libranet.common.tenant.TenantContext.require();
+        if (ctx.hasAnyRole(LibraryRole.LIBRARY_ADMIN.name(), LibraryRole.LIBRARIAN.name())) {
+            return assistant.ask(req.question());
+        }
+        return assistant.askPatron(req.question());
     }
 
     public record AskRequest(@NotBlank @Size(max = 500) String question) {}
+
+    /**
+     * Support-issue drafting (audit P2 — spec §20): the assistant maps the reporter's own
+     * words to a category + subject and hands back a confirm card. It NEVER creates the
+     * issue — the client calls POST /tenant/issues with source=AI only after the user
+     * taps Confirm. Metered like any assistant call.
+     */
+    @Operation(summary = "Draft a support issue (confirm-to-create)",
+            description = "Converts the member's own description into a structured issue draft "
+                    + "(category suggestion + verbatim subject/description). Never creates anything: "
+                    + "the draft returns confirmationRequired=true and the issue is only opened when "
+                    + "the reporter confirms and the client posts it to /tenant/issues. Nothing is "
+                    + "fabricated — the draft contains only the member's words. Plan-metered.")
+    @PostMapping("/issues/draft")
+    public AssistantService.IssueDraft issueDraft(@jakarta.validation.Valid @RequestBody IssueDraftRequest req) {
+        return assistant.issueDraft(req.description());
+    }
+
+    public record IssueDraftRequest(@NotBlank @Size(max = 10000) String description) {}
 
     /** Staff demand insights: want-it marks + reservation queues + zero-hit searches. */
     @Operation(summary = "Acquisition demand insights",
@@ -108,7 +144,7 @@ public class TenantAiController {
                     + "ceiling. Overage on any AI feature answers 403 PLAN_LIMIT_EXCEEDED.")
     @GetMapping("/usage")
     public AiQuotaService.UsageView usage() {
-        var ctx = TenantGuard.requireRole(LibraryRole.LIBRARY_ADMIN.name(), LibraryRole.LIBRARIAN.name());
+        var ctx = permissions.require(LibraryPerm.REPORTS_VIEW);
         return quota.current(ctx.libraryId());
     }
 

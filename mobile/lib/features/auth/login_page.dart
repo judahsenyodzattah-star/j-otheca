@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/api_client.dart';
 import '../../core/models.dart';
 import '../../core/session.dart';
+import '../../core/widgets/password_field.dart';
 
 final _api = ApiClient(baseUrl: ApiClient.defaultBaseUrl());
 
@@ -64,11 +65,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                   validator: (v) => (v == null || !v.contains('@')) ? 'Enter a valid email' : null,
                 ),
                 const SizedBox(height: 16),
-                TextFormField(
+                PasswordField(
                   controller: _password,
-                  obscureText: true,
+                  label: 'Password',
                   autofillHints: const [AutofillHints.password],
-                  decoration: const InputDecoration(labelText: 'Password'),
                   validator: (v) => (v == null || v.isEmpty) ? 'Enter your password' : null,
                 ),
                 if (_error != null) ...[
@@ -82,9 +82,18 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
                       : const Text('Sign in'),
                 ),
-                TextButton(
+                const SizedBox(height: 8),
+                // Two-CTA entry (audit P0·E3 — spec §3): never infer intent; offer both doors.
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.person_add_alt_1),
                   onPressed: () => context.go('/register'),
-                  child: const Text("Create a LibraNet account"),
+                  label: const Text('Join LibraNet'),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.domain_add_outlined),
+                  onPressed: () => context.go('/register-library'),
+                  label: const Text('Register a library'),
                 ),
               ]),
             ),

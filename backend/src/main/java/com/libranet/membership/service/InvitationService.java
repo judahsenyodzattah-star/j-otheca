@@ -23,6 +23,8 @@ import java.util.Map;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.libranet.permissions.model.LibraryPerm;
+import com.libranet.permissions.service.PermissionService;
 
 @Service
 public class InvitationService {
@@ -32,8 +34,12 @@ public class InvitationService {
     private final AuditService audit;
     private final String publicBaseUrl;
 
+        private final PermissionService permissions;
+
     public InvitationService(InvitationRepository invitations, LibraryRepository libraries,
-                             AuditService audit, @Value("${app.public-base-url}") String publicBaseUrl) {
+                             AuditService audit, @Value("${app.public-base-url}") String publicBaseUrl,
+                             PermissionService permissions) {
+        this.permissions = permissions;
         this.invitations = invitations;
         this.libraries = libraries;
         this.audit = audit;
@@ -42,7 +48,7 @@ public class InvitationService {
 
     @Transactional
     public InvitationDto create(CreateInvitationRequest req) {
-        TenantContext.Current ctx = TenantGuard.requireRole(LibraryRole.LIBRARY_ADMIN.name());
+        TenantContext.Current ctx = permissions.require(LibraryPerm.MEMBERS_MANAGE);
         Library library = libraries.findById(ctx.libraryId())
                 .orElseThrow(() -> ApiException.notFound("LIBRARY_NOT_FOUND", "Library not found"));
 
@@ -66,7 +72,7 @@ public class InvitationService {
 
     @Transactional(readOnly = true)
     public List<InvitationDto> list() {
-        TenantContext.Current ctx = TenantGuard.requireRole(LibraryRole.LIBRARY_ADMIN.name());
+        TenantContext.Current ctx = permissions.require(LibraryPerm.MEMBERS_MANAGE);
         return invitations.findByTenantId(ctx.libraryId()).stream()
                 .map(i -> InvitationDto.from(i, publicBaseUrl))
                 .toList();
@@ -74,7 +80,7 @@ public class InvitationService {
 
     @Transactional
     public void deactivate(String invitationId) {
-        TenantGuard.requireRole(LibraryRole.LIBRARY_ADMIN.name());
+        permissions.require(LibraryPerm.MEMBERS_MANAGE);
         Invitation invitation = invitations.findById(invitationId)
                 .orElseThrow(() -> ApiException.notFound("INVITATION_NOT_FOUND", "Invitation not found"));
         TenantGuard.requireBelongsToCurrentTenant(invitation.getTenantId());

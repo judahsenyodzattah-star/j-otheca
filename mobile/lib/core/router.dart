@@ -3,14 +3,24 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../features/auth/login_page.dart';
 import '../features/auth/register_page.dart';
+import '../features/circulation/desk_page.dart';
 import '../features/discovery/discovery_page.dart';
 import '../features/discovery/join_page.dart';
 import '../features/discovery/invitation_page.dart';
 import '../features/home/home_page.dart';
+import '../features/issues/my_issues_page.dart';
+import '../features/issues/staff_inbox_page.dart';
 import '../features/catalog/catalog_page.dart';
 import '../features/catalog/book_detail_page.dart';
 import '../features/ai/ai_page.dart';
+import '../features/manage/manage_page.dart';
+import '../features/onboarding/register_library_page.dart';
+import '../features/platform/platform_note_page.dart';
+import '../features/settings/settings_page.dart';
 import '../features/public/public_book_page.dart';
+import '../features/author/author_profile_page.dart';
+import '../features/author/author_public_page.dart';
+import '../features/author/author_studio_page.dart';
 import 'session.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -29,8 +39,22 @@ final routerProvider = Provider<GoRouter>((ref) {
       final onAuth = state.matchedLocation == '/login' || state.matchedLocation == '/register';
       final isPublicInvitation = state.matchedLocation.startsWith('/join/');
       final isPublicBookPage = state.matchedLocation.startsWith('/book/');
-      if (!signedIn && !onAuth && !isPublicInvitation && !isPublicBookPage) return '/login';
-      if (signedIn && onAuth) return '/discover';
+      // E3: the library-registration CTA is reachable pre-auth (page prompts sign-in first).
+      final isLibraryCta = state.matchedLocation == '/register-library';
+      if (!signedIn && !onAuth && !isPublicInvitation && !isPublicBookPage && !isLibraryCta) {
+        return '/login';
+      }
+      // E5: platform SUPER_ADMIN without any membership never enters tenant UX —
+      // their console is the web platform console (by design, mirror parity).
+      if (signedIn && session.isSuperAdmin && session.approved.isEmpty &&
+          state.matchedLocation != '/platform-note' && !isLibraryCta) {
+        return '/platform-note';
+      }
+      if (signedIn && onAuth) {
+        return (session.isSuperAdmin && session.approved.isEmpty)
+            ? '/platform-note'
+            : '/discover';
+      }
       return null;
     },
     routes: [
@@ -50,6 +74,27 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/catalog', builder: (context, state) => const CatalogPage()),
       // AI surface (Phase 10): semantic search, recommendations, staff assistant + demand insights
       GoRoute(path: '/ai', builder: (context, state) => const AiPage()),
+      // Role-aware shell surfaces (audit P0·E4): circulation desk for staff, manage for library admins
+      GoRoute(path: '/desk', builder: (context, state) => const DeskPage()),
+      GoRoute(path: '/manage', builder: (context, state) => const ManagePage()),
+      GoRoute(path: '/issues', builder: (context, state) => const MyIssuesPage()),
+      GoRoute(path: '/issues/staff', builder: (context, state) => const StaffInboxPage()),
+      // Author capability (audit P3): same account, opt-in profile; studio + editor are
+      // authenticated; the public page stays anonymous.
+      GoRoute(path: '/author', builder: (context, state) => const AuthorStudioPage()),
+      GoRoute(path: '/author/profile', builder: (context, state) => const AuthorProfilePage()),
+      GoRoute(
+          path: '/authors/:slug',
+          builder: (context, state) =>
+              AuthorPublicPage(slug: state.pathParameters['slug']!)),
+      // Separate library-registration flow (audit P0·E3 — spec §3.2); public CTA, auth inside
+      GoRoute(path: '/register-library',
+          builder: (context, state) => const RegisterLibraryPage()),
+      // Platform-only landing for membership-less SUPER_ADMIN (audit P0·E5)
+      GoRoute(path: '/platform-note',
+          builder: (context, state) => const PlatformNotePage()),
+      // Settings shell (audit P1·E6/E7 — spec §9/§11): role-filtered, 2-pane on desktop
+      GoRoute(path: '/settings', builder: (context, state) => const SettingsPage()),
       GoRoute(
           path: '/catalog/:bookId',
           builder: (context, state) => BookDetailPage(bookId: state.pathParameters['bookId']!)),

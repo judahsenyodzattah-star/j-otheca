@@ -42,6 +42,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.libranet.permissions.model.LibraryPerm;
+import com.libranet.permissions.service.PermissionService;
 
 /**
  * Reviews & moderation (Phase 7).
@@ -67,10 +69,14 @@ public class ReviewService {
     private final UserRepository users;
     private final AuditService audit;
 
+        private final PermissionService permissions;
+
     public ReviewService(BookReviewRepository reviews, ReviewReportRepository reports,
                          ReviewHelpfulVoteRepository votes, BookRepository books,
                          LibraryRepository libraries, MembershipRepository memberships,
-                         UserRepository users, AuditService audit) {
+                         UserRepository users, AuditService audit,
+                            PermissionService permissions) {
+        this.permissions = permissions;
         this.reviews = reviews;
         this.reports = reports;
         this.votes = votes;
@@ -177,8 +183,7 @@ public class ReviewService {
     /** Staff queue, filterable by status (default PENDING). Real identities, open-report counts. */
     @Transactional(readOnly = true)
     public Page<ReviewDto> moderationQueue(ReviewStatus status, Pageable pageable) {
-        TenantContext.Current ctx = TenantGuard.requireRole(
-                LibraryRole.LIBRARY_ADMIN.name(), LibraryRole.LIBRARIAN.name());
+        TenantContext.Current ctx = permissions.require(LibraryPerm.REVIEWS_MODERATE);
         ReviewStatus effective = status == null ? ReviewStatus.PENDING : status;
         Page<BookReview> page = reviews.findByTenantIdAndStatus(ctx.libraryId(), effective, sorted(pageable));
         return page.map(r -> toDto(r, true, ctx, null,
@@ -187,8 +192,7 @@ public class ReviewService {
 
     @Transactional
     public ReviewDto approve(String id) {
-        TenantContext.Current ctx = TenantGuard.requireRole(
-                LibraryRole.LIBRARY_ADMIN.name(), LibraryRole.LIBRARIAN.name());
+        TenantContext.Current ctx = permissions.require(LibraryPerm.REVIEWS_MODERATE);
         BookReview review = staffReview(ctx, id);
         review.setStatus(ReviewStatus.APPROVED);
         review.setModeratedById(ctx.membershipId());
@@ -202,8 +206,7 @@ public class ReviewService {
 
     @Transactional
     public ReviewDto reject(String id, String note) {
-        TenantContext.Current ctx = TenantGuard.requireRole(
-                LibraryRole.LIBRARY_ADMIN.name(), LibraryRole.LIBRARIAN.name());
+        TenantContext.Current ctx = permissions.require(LibraryPerm.REVIEWS_MODERATE);
         BookReview review = staffReview(ctx, id);
         review.setStatus(ReviewStatus.REJECTED);
         review.setModeratedById(ctx.membershipId());
@@ -250,8 +253,7 @@ public class ReviewService {
     /** Staff: dismiss all open reports on a review without acting on the review itself. */
     @Transactional
     public void dismissReports(String reviewId) {
-        TenantContext.Current ctx = TenantGuard.requireRole(
-                LibraryRole.LIBRARY_ADMIN.name(), LibraryRole.LIBRARIAN.name());
+        TenantContext.Current ctx = permissions.require(LibraryPerm.REVIEWS_MODERATE);
         staffReview(ctx, reviewId);
         resolveReports(ctx, reviewId, ReportStatus.DISMISSED);
     }

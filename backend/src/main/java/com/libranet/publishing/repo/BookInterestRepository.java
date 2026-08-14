@@ -29,6 +29,9 @@ public interface BookInterestRepository extends JpaRepository<BookInterest, Stri
 
     long countByTenantIdAndMembershipId(String tenantId, String membershipId);
 
+    /** E17: studio aggregates across libraries — profiles are user-global, never tenant-bound. */
+    List<BookInterest> findByBookIdIn(java.util.Collection<String> bookIds);
+
     @Query("SELECT i.bookId, COUNT(i) FROM BookInterest i WHERE i.tenantId = :tenantId "
             + "GROUP BY i.bookId ORDER BY COUNT(i) DESC")
     List<Object[]> topDemanded(@Param("tenantId") String tenantId, org.springframework.data.domain.Pageable pageable);

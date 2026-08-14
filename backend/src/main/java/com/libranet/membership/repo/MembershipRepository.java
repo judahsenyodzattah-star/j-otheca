@@ -22,6 +22,9 @@ public interface MembershipRepository extends JpaRepository<Membership, String>,
 
     List<Membership> findByUserId(String userId);
 
+    List<Membership> findByTenantIdAndRoleInAndStatus(String tenantId, java.util.Collection<com.libranet.membership.model.LibraryRole> roles,
+                                                      com.libranet.membership.model.MembershipStatus status);
+
     long countByTenantIdAndStatus(String tenantId, MembershipStatus status);
     /** Platform analytics: memberships grouped by status cross-tenant. */
     long countByStatus(MembershipStatus status);

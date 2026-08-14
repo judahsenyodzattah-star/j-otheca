@@ -26,7 +26,7 @@ Build, dependencies, tests. Downloads every Java library automatically (that's w
 
 ```bash
 mvn -DskipTests package        # build the jar (fast, no tests)
-mvn verify                     # build + ALL 120 tests — the merge gate
+mvn verify                     # build + ALL 151 tests — the merge gate
 mvn test                       # tests only
 mvn test -Dtest=TenantIsolationTest       # one suite
 mvn spring-boot:run -Dspring-boot.run.profiles=dev   # run without packaging
@@ -126,7 +126,7 @@ In-process replacements so dev mode runs with literally nothing but Java + Maven
 
 | Tool | Type | Command |
 |---|---|---|
-| JUnit 5 + Spring Boot Test | [EMBEDDED] | `mvn verify` / `mvn test` (120 tests, 13 suites) |
+| JUnit 5 + Spring Boot Test | [EMBEDDED] | `mvn verify` / `mvn test` (151 tests, 16 suites) |
 | flutter_test | [EMBEDDED] | `flutter test` |
 | curl | [REQUIRED on any OS] | API smoke tests — see scripts |
 | GitHub Actions | hosted CI | `.github/workflows/ci.yml` runs `mvn -B verify`, flutter analyze/test/build, and a full staging migration smoke (real PG, asserts RLS policies, HNSW index, 4 trigram GIN indexes) on every push |
