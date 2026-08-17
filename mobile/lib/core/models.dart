@@ -1,6 +1,8 @@
 /// Hand-written DTOs mirroring the backend v1 contract.
 /// When the OpenAPI generator step lands (Phase 4+) these become generated.
 
+library;
+
 class AuthTokens {
   AuthTokens({required this.accessToken, required this.refreshToken, required this.expiresInSeconds});
   final String accessToken;

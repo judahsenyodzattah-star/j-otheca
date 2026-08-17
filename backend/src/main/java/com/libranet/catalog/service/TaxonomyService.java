@@ -20,7 +20,6 @@ import com.libranet.catalog.repo.ShelfLocationRepository;
 import com.libranet.common.error.ApiException;
 import com.libranet.common.tenant.TenantContext;
 import com.libranet.common.tenant.TenantGuard;
-import com.libranet.membership.model.LibraryRole;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;

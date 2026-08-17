@@ -29,8 +29,8 @@ class PlatformNotePage extends ConsumerWidget {
                 const SizedBox(height: 12),
                 const Text(
                   "You're signed in as the platform Super Admin. You run the whole "
-                  "network — onboarding, plans, payments, tenant health — but by design "
-                  "you cannot act inside any single library.",
+                  'network — onboarding, plans, payments, tenant health — but by design '
+                  'you cannot act inside any single library.',
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 8),

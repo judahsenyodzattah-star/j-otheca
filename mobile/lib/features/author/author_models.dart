@@ -2,6 +2,8 @@
 /// same account — these types describe the /me/author-* payloads. Flutter-free so the
 /// parsing, masking and validation logic is unit-testable without a widget harness.
 
+library;
+
 const authorTypes = <String>['INDIE', 'TRADITIONALLY_PUBLISHED', 'HYBRID', 'ORGANIZATION'];
 
 String authorTypeLabel(String type) => switch (type) {

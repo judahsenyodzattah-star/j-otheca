@@ -1,6 +1,8 @@
 /// Support-issues models + pure helpers (audit P2 — spec §17–§23). Kept Flutter-free so
 /// the status machine and label logic are unit-testable without a widget harness.
 
+library;
+
 /// Spec §22: exactly six categories — the dropdown and the backend CHECK agree.
 const issueCategories = <String>[
   'ACCOUNT_ACCESS',

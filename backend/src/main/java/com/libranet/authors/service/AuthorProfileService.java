@@ -11,7 +11,6 @@ import com.libranet.authors.dto.AuthorDtos.PublicAuthorDto;
 import com.libranet.authors.dto.AuthorDtos.UpsertAuthorProfileRequest;
 import com.libranet.authors.model.AuthorProfile;
 import com.libranet.authors.repo.AuthorProfileRepository;
-import com.libranet.catalog.model.Book;
 import com.libranet.catalog.repo.BookRepository;
 import com.libranet.common.error.ApiException;
 import com.libranet.common.tenant.CodeGenerator;
