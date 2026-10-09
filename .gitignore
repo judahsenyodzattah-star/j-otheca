@@ -1,29 +1,68 @@
-# ---- build outputs ----
-target/
-build/
-out/
-dist/
-# ---- deps / caches ----
+﻿# ---- Build outputs ----
+**/target/
+**/build/
+**/out/
+**/dist/
+
+# ---- Dependencies and caches ----
 node_modules/
 .venv/
 **/.DS_Store
-# ---- flutter / dart ----
-mobile/.dart_tool/
-mobile/build/
-mobile/.flutter-plugins*
+**/__pycache__/
+**/.pytest_cache/
+**/.gradle/
+**/.dart_tool/
+
+# ---- Flutter / Dart ----
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
 mobile/.packages
-# ---- java ----
+mobile/build/
+mobile/android/app/build/
+mobile/android/local.properties
+mobile/ios/Pods/
+mobile/ios/.symlinks/
+
+# ---- Java ----
 *.class
-*.jar
-!.mvn/wrapper/maven-wrapper.jar
-# ---- ide ----
+!**/.mvn/wrapper/maven-wrapper.jar
+
+# ---- IDE and local machine ----
 .idea/
 *.iml
-.vscode/
-!.vscode/settings.json   # shared: disables noisy JDT null-analysis (codebase is javac-clean)
-# ---- env & secrets ----
+.vscode/*
+!.vscode/settings.json
+.DS_Store
+Thumbs.db
+
+# ---- Environment files and secrets ----
 .env
+.env.*
 *.env
+*.env.*
+!.env.example
+!.env.*.example
 !*.env.example
-# ---- misc ----
+
+# ---- Private keys and signing credentials ----
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+secrets/
+private/
+
+# ---- Database dumps and backups ----
+*.dump
+*.bak
+*.sql.gz
+*.sqlite
+*.sqlite3
+
+# ---- Logs and temporary files ----
 *.log
+*.tmp
+hs_err_pid*
+replay_pid*

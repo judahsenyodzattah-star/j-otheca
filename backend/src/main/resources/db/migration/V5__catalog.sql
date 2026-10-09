@@ -73,7 +73,7 @@ CREATE TABLE books (
     subjects        VARCHAR(500),                        -- comma-separated tags/keywords
     category_id     VARCHAR(36)  NULL REFERENCES categories(id),
     cover_ref       VARCHAR(500),
-    rating_avg      DOUBLE       NOT NULL DEFAULT 0,     -- aggregates written by Phase 7
+    rating_avg      DOUBLE PRECISION NOT NULL DEFAULT 0,     -- aggregates written by Phase 7
     rating_count    INT          NOT NULL DEFAULT 0,
     published       BOOLEAN      NOT NULL DEFAULT TRUE,  -- hidden from patrons when FALSE
     created_at      TIMESTAMP    NOT NULL,

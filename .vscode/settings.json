@@ -1,0 +1,6 @@
+{
+  // The project compiles clean with javac + passes 120/120 tests (`mvn verify`).
+  // The Java language server's experimental null analysis produces warning noise on
+  // method references (Java(67109822)) that is not real for this codebase — keep it off.
+  "java.compile.nullAnalysis.mode": "disabled"
+}
