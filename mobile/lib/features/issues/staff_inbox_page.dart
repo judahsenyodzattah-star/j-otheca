@@ -380,7 +380,7 @@ class _StaffIssueDetailPageState extends ConsumerState<StaffIssueDetailPage> {
           padding: const EdgeInsets.all(12),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(mainAxisSize: MainAxisSize.min, children: [
-              Text(m.authorName ?? (m.system ? 'LibraNet assistant' : 'Member'),
+              Text(m.authorName ?? (m.system ? 'J’otheca assistant' : 'Member'),
                   style: Theme.of(context).textTheme.labelSmall),
               if (m.internal) ...[
                 const SizedBox(width: 6),

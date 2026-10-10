@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:libranet_app/core/widgets/role_nav.dart';
+import 'package:jotheca_app/core/widgets/role_nav.dart';
 
 /// Audit P0·E4 — the role-aware shell contract (spec §5/§6, rule #12). These pin the
 /// role→tabs mapping so a refactor can't silently drop a staff surface or leak admin

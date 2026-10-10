@@ -146,7 +146,7 @@ class _AiPageState extends ConsumerState<AiPage> {
     final demand = ref.watch(_demandProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('LibraNet AI')),
+      appBar: AppBar(title: const Text('J’otheca AI')),
       bottomNavigationBar: RoleNavBar(
         current: 'ai',
         items: roleNavItems(session.activeRole, isSuperAdmin: session.isSuperAdmin),

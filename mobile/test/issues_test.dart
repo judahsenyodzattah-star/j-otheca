@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:libranet_app/features/issues/issues_models.dart';
+import 'package:jotheca_app/features/issues/issues_models.dart';
 
 /// Audit P2 — the support lane's client-side contract (spec §17–§23). These functions
 /// are pure UI logic; the backend independently enforces roles, tenancy and limits.

@@ -1,4 +1,4 @@
-# LibraNet runbooks (Phase 11)
+# J’otheca runbooks (Phase 11)
 
 One page per incident. Every runbook: trigger → immediate actions → verification → escalation.
 Quote `traceId` from the `ApiError` envelope when paging.

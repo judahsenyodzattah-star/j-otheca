@@ -1,4 +1,4 @@
-# LibraNet — A Secure Multi-Tenant SaaS Platform for Library Management with AI-Assisted Discovery
+# J’otheca — A Secure Multi-Tenant SaaS Platform for Library Management with AI-Assisted Discovery
 
 *Pentecost University*
 
@@ -29,7 +29,7 @@ Signed: …………………………  Date: ………………
 Small libraries are priced or skilled out of professional library software: open-source
 integrated library systems assume one installation per institution and an administrator to
 run it, while hosted offerings are closed and per-institution priced. This dissertation
-presents **LibraNet**, a multi-tenant software-as-a-service platform in which many libraries
+presents **J’otheca**, a multi-tenant software-as-a-service platform in which many libraries
 share one deployment as isolated tenants — covering identity and membership, plan-metered
 subscriptions with billing on African payment rails, physical-first circulation with barcoded
 desk flows, author-owned personal libraries with public book pages, media, ratings and

@@ -23,6 +23,8 @@ app:
     backend: redis                                # multi-instance safe throttling
   storage:
     provider: minio                               # durable object storage (MINIO_* env)
+  payments:
+    provider: paystack                            # real PSP; requires PAYSTACK_SECRET_KEY (never silent mock)
   ai:
     embedder: ${AI_EMBEDDER:local}
     search:

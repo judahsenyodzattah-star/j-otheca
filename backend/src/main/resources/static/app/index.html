@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>LibraNet — demo client</title>
+<title>J’otheca — demo client</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
   :root { --indigo:#4F46E5; --indigo-d:#3730A3; --bg:#F8FAFC; --card:#FFFFFF; --ink:#0F172A;
@@ -67,7 +67,7 @@
 </head>
 <body>
 <header class="bar">
-  <b>📚 LibraNet</b> <span style="opacity:.75;font-size:13px">demo web mirror of the Flutter client</span>
+  <b>📚 J’otheca</b> <span style="opacity:.75;font-size:13px">demo web mirror of the Flutter client</span>
   <div class="who">
     <span id="whoName" class="hidden"></span>
     <span id="whoLib" class="libpill hidden"></span>
@@ -77,7 +77,7 @@
 
 <section id="login" class="card" style="max-width:520px;margin:48px auto">
   <h2>Sign in</h2>
-  <p class="sub">Real authentication against the live LibraNet API — same accounts the library demo uses.</p>
+  <p class="sub">Real authentication against the live J’otheca API — same accounts the library demo uses.</p>
   <div id="acctBtns" class="row" style="margin-bottom:12px"></div>
   <label class="sub" for="email">Email</label>
   <input id="email" type="email" autocomplete="username">
@@ -101,11 +101,11 @@
 
 <script>
 const presets = [
-  {label:'👤 Patron — Accra Central', email:'patron@libranet.app', pw:'Patron12345!'},
-  {label:'🛠 Librarian — Pentecost Univ.', email:'staff@libranet.app', pw:'Library12345!'},
-  {label:'🧭 Library admin — Accra', email:'accraadmin@libranet.app', pw:'Library12345!'},
-  {label:'✍️ Personal author', email:'author@libranet.app', pw:'Author12345!'},
-  {label:'🏛 Platform super admin', email:'admin@libranet.app', pw:'Admin12345!'},
+  {label:'👤 Patron — Accra Central', email:'patron@jotheca.app', pw:'Patron12345!'},
+  {label:'🛠 Librarian — Pentecost Univ.', email:'staff@jotheca.app', pw:'Library12345!'},
+  {label:'🧭 Library admin — Accra', email:'accraadmin@jotheca.app', pw:'Library12345!'},
+  {label:'✍️ Personal author', email:'author@jotheca.app', pw:'Author12345!'},
+  {label:'🏛 Platform super admin', email:'admin@jotheca.app', pw:'Admin12345!'},
 ];
 document.getElementById('acctBtns').innerHTML =
   presets.map((p,i)=>`<button class="mini" onclick="preset(${i})">${p.label}</button>`).join('');

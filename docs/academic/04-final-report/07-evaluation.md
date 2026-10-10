@@ -43,10 +43,10 @@ carry real marks.]
 
 ## 7.5 Comparison with existing systems
 
-Against the Chapter 2 gap table: Koha/Evergreen retain bibliographic depth LibraNet
+Against the Chapter 2 gap table: Koha/Evergreen retain bibliographic depth J’otheca
 deliberately omitted (MARC, ILL) — scope honesty; hosted consortia solve hosting but remain
 closed and unauditable; no reviewed system couples tenant-pinned AI with plan metering.
-LibraNet's delta is the *verified conjunction*.
+J’otheca's delta is the *verified conjunction*.
 
 ## 7.6 Limitations
 

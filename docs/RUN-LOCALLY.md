@@ -1,4 +1,4 @@
-# Run LibraNet Locally — Everything You Need
+# Run J’otheca Locally — Everything You Need
 
 Two components: **backend** (Java 21 / Spring Boot 3.5) and **client** (Flutter — mobile + web).
 The backend also serves a zero-install **web mirror** of the app UI at `/`, so you can try
@@ -26,7 +26,7 @@ cd backend
 mvn spring-boot:run -Dspring-boot.run.profiles=dev
 # — or —
 mvn -DskipTests package
-java -jar target/libranet-backend-0.1.0-SNAPSHOT.jar --spring.profiles.active=dev
+java -jar target/jotheca-backend-0.1.0-SNAPSHOT.jar --spring.profiles.active=dev
 ```
 
 - App + web UI: **http://localhost:8080/**
@@ -62,12 +62,12 @@ flutter run --dart-define=API_BASE_URL=https://api.example.com
 
 | Email | Password | Role / library |
 |---|---|---|
-| patron@libranet.app | `Patron12345!` | member — Accra Central (LIB-AC2026) |
-| staff@libranet.app | `Library12345!` | librarian — Pentecost (LIB-PU2026), staff AI tools |
-| libadmin@libranet.app | `Library12345!` | library admin — Pentecost |
-| accraadmin@libranet.app | `Library12345!` | library admin — Accra Central |
-| author@libranet.app | `Author12345!` | author portal (LIB-AW2026) |
-| admin@libranet.app | `Admin12345!` | SUPER_ADMIN (platform admin; never does library ops) |
+| patron@jotheca.app | `Patron12345!` | member — Accra Central (LIB-AC2026) |
+| staff@jotheca.app | `Library12345!` | librarian — Pentecost (LIB-PU2026), staff AI tools |
+| libadmin@jotheca.app | `Library12345!` | library admin — Pentecost |
+| accraadmin@jotheca.app | `Library12345!` | library admin — Accra Central |
+| author@jotheca.app | `Author12345!` | author portal (LIB-AW2026) |
+| admin@jotheca.app | `Admin12345!` | SUPER_ADMIN (platform admin; never does library ops) |
 
 Invite code **ASH-2026** joins Ashesi University Library (LIB-AU2026).
 
@@ -76,12 +76,12 @@ circulation desk (checkout/return via patron membership QR).
 
 ## 5. Try it in 3 minutes
 
-1. Sign in as `patron@libranet.app` → Home shows the Accra membership card + QR.
+1. Sign in as `patron@jotheca.app` → Home shows the Accra membership card + QR.
 2. **Discover** → search libraries, join Ashesi with `ASH-2026`.
 3. **Catalog** → search the shelves (fuzzy/trigram search behind it).
 4. **✨ AI discovery** → ask "something about Ghanaian history", view *For you*
    recommendations, ask the assistant "how do I renew?".
-5. Sign out, sign in as `staff@libranet.app` → demand insights + AI usage appear.
+5. Sign out, sign in as `staff@jotheca.app` → demand insights + AI usage appear.
 
 ## 6. Staging stack (Docker, production-like)
 

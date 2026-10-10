@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:libranet_app/features/author/author_models.dart';
+import 'package:jotheca_app/features/author/author_models.dart';
 
 /// Audit P3 — the author capability's client contract. The backend re-enforces privacy,
 /// validation and rule #15; these tests pin the client-side parsing/pre-check logic.

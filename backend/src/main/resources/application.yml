@@ -1,10 +1,10 @@
 spring:
   application:
-    name: libranet
+    name: jotheca
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/libranet}
-    username: ${SPRING_DATASOURCE_USERNAME:libranet}
-    password: ${SPRING_DATASOURCE_PASSWORD:libranet}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/jotheca}
+    username: ${SPRING_DATASOURCE_USERNAME:jotheca}
+    password: ${SPRING_DATASOURCE_PASSWORD:jotheca}
   jpa:
     hibernate:
       ddl-auto: none            # schema comes ONLY from Flyway migrations (spec §41)
@@ -31,16 +31,16 @@ app:
   security:
     login-max-attempts: ${LOGIN_MAX_ATTEMPTS:10}       # failed logins before lockout
     login-lockout-minutes: ${LOGIN_LOCKOUT_MINUTES:15}
-  public-base-url: ${PUBLIC_BASE_URL:https://libranet.app}
+  public-base-url: ${PUBLIC_BASE_URL:https://jotheca.app}
   cors-allowed-origin-patterns: ${CORS_ORIGINS:*}
   media:
     max-file-bytes: ${MEDIA_MAX_FILE_BYTES:8388608}   # 8 MB per upload, hard per-file cap
   storage:
     provider: ${STORAGE_PROVIDER:memory}  # memory (dev/test) | minio (staging/prod)
     endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
-    access-key: ${MINIO_ACCESS_KEY:libranet}
-    secret-key: ${MINIO_SECRET_KEY:libranet-dev}
-    bucket: ${MINIO_BUCKET:libranet-media}
+    access-key: ${MINIO_ACCESS_KEY:jotheca}
+    secret-key: ${MINIO_SECRET_KEY:jotheca-dev}
+    bucket: ${MINIO_BUCKET:jotheca-media}
 
   ai:
     embedder: ${AI_EMBEDDER:local}            # local (offline, deterministic) | openai

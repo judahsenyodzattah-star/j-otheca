@@ -1,4 +1,4 @@
-# LibraNet — Every Tool Involved & Its Commands
+# J’otheca — Every Tool Involved & Its Commands
 
 Complete inventory: what each piece of software is, why it's in the project, and the
 exact commands this repository uses with it.
@@ -15,8 +15,8 @@ Backend language + runtime. Compiles and runs the Spring Boot app.
 
 ```bash
 javac -version                 # verify install (21.x)
-java -jar target/libranet-backend-0.1.0-SNAPSHOT.jar --spring.profiles.active=dev
-java -jar target/libranet-backend-0.1.0-SNAPSHOT.jar --spring.profiles.active=staging
+java -jar target/jotheca-backend-0.1.0-SNAPSHOT.jar --spring.profiles.active=dev
+java -jar target/jotheca-backend-0.1.0-SNAPSHOT.jar --spring.profiles.active=staging
 java -jar ... --server.port=8090          # override port when 8080 is busy
 ```
 
@@ -37,7 +37,7 @@ mvn -q -B dependency:go-offline          # pre-fetch deps (used in the Dockerfil
 Version control. `.gitignore` in the project root keeps generated junk out.
 
 ```bash
-git init && git add . && git commit -m "LibraNet import"   # first local repo
+git init && git add . && git commit -m "J’otheca import"   # first local repo
 git status / git log --oneline
 ```
 
@@ -159,7 +159,7 @@ python3 docs/academic/bin/to_docx.py docs/academic/04-final-report/DISSERTATION.
 Packaging the project for hand-in/sharing:
 
 ```bash
-zip -qr libranet-complete.zip libranet -x "*/target/*" "*/build/*" "*/.dart_tool/*"
+zip -qr jotheca-complete.zip jotheca -x "*/target/*" "*/build/*" "*/.dart_tool/*"
 ```
 
 ---

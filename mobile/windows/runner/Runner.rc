@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "libranet_app" "\0"
+            VALUE "FileDescription", "jotheca_app" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "libranet_app" "\0"
+            VALUE "InternalName", "jotheca_app" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.example. All rights reserved." "\0"
-            VALUE "OriginalFilename", "libranet_app.exe" "\0"
-            VALUE "ProductName", "libranet_app" "\0"
+            VALUE "OriginalFilename", "jotheca_app.exe" "\0"
+            VALUE "ProductName", "jotheca_app" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

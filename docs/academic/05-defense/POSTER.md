@@ -1,6 +1,6 @@
 # Poster (A1 portrait) — content blocks
 
-**Title strip:** LibraNet — many libraries, one platform, isolation you can test.
+**Title strip:** J’otheca — many libraries, one platform, isolation you can test.
 Senyo-Dzattah Judah Agbemavor · PUIT/23110016 · BSc Information Technology · Supervisor [SUPERVISOR NAME] · Pentecost University
 
 **Problem (top-left):** professional library software = one install per library; small

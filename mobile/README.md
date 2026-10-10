@@ -1,4 +1,4 @@
-# libranet_app
+# jotheca_app
 
 A new Flutter project.
 

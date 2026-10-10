@@ -35,7 +35,7 @@ class PlatformNotePage extends ConsumerWidget {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Use the LibraNet web platform console for platform operations.',
+                  'Use the J’otheca web platform console for platform operations.',
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 24),

@@ -3,16 +3,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/router.dart';
 import 'core/theme.dart';
 
-void main() => runApp(const ProviderScope(child: LibraNetApp()));
+void main() => runApp(const ProviderScope(child: JothecaApp()));
 
-class LibraNetApp extends ConsumerWidget {
-  const LibraNetApp({super.key});
+class JothecaApp extends ConsumerWidget {
+  const JothecaApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
     return MaterialApp.router(
-      title: 'LibraNet',
+      title: 'J’otheca',
       debugShowCheckedModeBanner: false,
       theme: LibraTheme.light(),
       darkTheme: LibraTheme.dark(),

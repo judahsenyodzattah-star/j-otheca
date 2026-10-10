@@ -1,6 +1,6 @@
 {
-    "name": "libranet_app",
-    "short_name": "libranet_app",
+    "name": "jotheca_app",
+    "short_name": "jotheca_app",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

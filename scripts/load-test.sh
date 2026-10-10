@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# LibraNet smoke-load on the hot read endpoints (Phase 11). Not a stress tool — a repeatable
+# J’otheca smoke-load on the hot read endpoints (Phase 11). Not a stress tool — a repeatable
 # latency baseline you run before/after perf changes:
 #   BASE_URL=http://localhost:8080 REQUESTS=40 scripts/load-test.sh
 # Prints per endpoint: min / avg / p95 / max (client-side, sequential requests).
@@ -9,7 +9,7 @@ REQUESTS="${REQUESTS:-40}"
 ACCRA_UID="LIB-AC2026"
 
 TOKEN=$(curl -sf -X POST "$BASE_URL/api/v1/auth/login" -H 'Content-Type: application/json' \
-  -d '{"email":"patron@libranet.app","password":"Patron12345!"}' \
+  -d '{"email":"patron@jotheca.app","password":"Patron12345!"}' \
   | sed -n 's/.*"accessToken":"\([^"]*\)".*/\1/p')
 [ -n "${TOKEN:-}" ] || { echo "login failed — is the app running at $BASE_URL?"; exit 1; }
 
@@ -39,7 +39,7 @@ run() { # label url extra-curl-args...
   report "$label" "$TMP/times"
 }
 
-echo "LibraNet load baseline — $REQUESTS sequential requests per endpoint against $BASE_URL"
+echo "J’otheca load baseline — $REQUESTS sequential requests per endpoint against $BASE_URL"
 run "GET /tenant/catalog/books (auth search)" \
     "$BASE_URL/api/v1/tenant/catalog/books?q=history&size=20" \
     -H "Authorization: Bearer $TOKEN" -H "X-Library-Id: $ACCRA_UID"

@@ -2,9 +2,9 @@
 # Restore drill / recovery: rebuild the DB from a backup dump into a TARGET database that will
 # be created fresh. Never runs against the live database name unless explicitly pointed there.
 #   DATABASE_URL=postgres://user:pass@host:5432/postgres \
-#   TARGET_DB=libranet_restore \
-#   DUMP=backups/libranet-db-20260811-030000.dump \
-#   MINIO_DATA_DIR=/data/minio-restore BLOBS=backups/libranet-blobs-20260811-030000.tar.gz \
+#   TARGET_DB=jotheca_restore \
+#   DUMP=backups/jotheca-db-20260811-030000.dump \
+#   MINIO_DATA_DIR=/data/minio-restore BLOBS=backups/jotheca-blobs-20260811-030000.tar.gz \
 #   scripts/restore.sh
 set -euo pipefail
 DATABASE_URL="${DATABASE_URL:?admin DSN, e.g. postgres://user:pass@host:5432/postgres}"

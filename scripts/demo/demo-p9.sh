@@ -12,13 +12,13 @@ check() { # name expected actual
 
 echo "== 1. logins =="
 LIBADMIN=$(curl -s $BASE/api/v1/auth/login -H 'Content-Type: application/json' \
-  -d '{"email":"libadmin@libranet.app","password":"Library12345!"}' | J "['accessToken']")
+  -d '{"email":"libadmin@jotheca.app","password":"Library12345!"}' | J "['accessToken']")
 ACC=$(curl -s $BASE/api/v1/auth/login -H 'Content-Type: application/json' \
-  -d '{"email":"accraadmin@libranet.app","password":"Library12345!"}' | J "['accessToken']")
+  -d '{"email":"accraadmin@jotheca.app","password":"Library12345!"}' | J "['accessToken']")
 PATRON=$(curl -s $BASE/api/v1/auth/login -H 'Content-Type: application/json' \
-  -d '{"email":"patron@libranet.app","password":"Patron12345!"}' | J "['accessToken']")
+  -d '{"email":"patron@jotheca.app","password":"Patron12345!"}' | J "['accessToken']")
 SUPER=$(curl -s $BASE/api/v1/auth/login -H 'Content-Type: application/json' \
-  -d '{"email":"admin@libranet.app","password":"Admin12345!"}' | J "['accessToken']")
+  -d '{"email":"admin@jotheca.app","password":"Admin12345!"}' | J "['accessToken']")
 [ ${#LIBADMIN} -gt 100 ] && [ ${#SUPER} -gt 100 ] && echo "  ✔ four tokens issued" || exit 1
 
 echo "== 2. subscription view (Pentecost / PROFESSIONAL) =="

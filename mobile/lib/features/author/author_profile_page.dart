@@ -111,7 +111,7 @@ class _AuthorProfilePageState extends ConsumerState<AuthorProfilePage> {
       body: ListView(padding: const EdgeInsets.all(16), children: [
         Text('What readers see', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 4),
-        const Text('Your pen name fronts everything — the name on your LibraNet account '
+        const Text('Your pen name fronts everything — the name on your J’otheca account '
             'never shows publicly unless you type it here yourself.'),
         const SizedBox(height: 12),
         TextField(

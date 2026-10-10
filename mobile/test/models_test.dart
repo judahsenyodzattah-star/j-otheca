@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:libranet_app/core/models.dart';
+import 'package:jotheca_app/core/models.dart';
 
 void main() {
   test('prettyEnum renders constants readably', () {

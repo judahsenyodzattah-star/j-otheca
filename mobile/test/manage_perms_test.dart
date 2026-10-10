@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:libranet_app/features/manage/perm_overrides.dart';
+import 'package:jotheca_app/features/manage/perm_overrides.dart';
 
-import 'package:libranet_app/features/settings/invoice_row.dart';
+import 'package:jotheca_app/features/settings/invoice_row.dart';
 
 /// audit P4: per-staff permission override model (E19) + invoice parsing (E20).
 void main() {

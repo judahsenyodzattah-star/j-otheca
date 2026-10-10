@@ -2,7 +2,7 @@
 
 ## What must survive a disaster
 
-1. **Postgres `libranet` database** — every table is created by Flyway migrations only
+1. **Postgres `jotheca` database** — every table is created by Flyway migrations only
    (V1…V19). Schema is reproducible; **data** is the crown jewel.
 2. **Object storage blobs** — media bytes under keys `t/{tenantId}/…`, referenced by
    `media_objects`. DB and blobs must come from the same backup window (backup script
@@ -24,8 +24,8 @@ Scripts: `scripts/backup.sh` (env: `DATABASE_URL`, `MINIO_DATA_DIR`, `BACKUP_DIR
 
 ## Quarterly restore drill (sign off an entry each quarter)
 
-1. Pick the latest nightly pair (`libranet-db-*.dump`, `libranet-blobs-*.tar.gz`).
-2. Run `scripts/restore.sh` with a **fresh** `TARGET_DB` (e.g. `libranet_restore_$(date +%s)`)
+1. Pick the latest nightly pair (`jotheca-db-*.dump`, `jotheca-blobs-*.tar.gz`).
+2. Run `scripts/restore.sh` with a **fresh** `TARGET_DB` (e.g. `jotheca_restore_$(date +%s)`)
    — the script *only* drops the target you name, never implicitly the live DB.
 3. The script's smoke block must print:
    - non-zero counts for `libraries`, `memberships`, `books`, `audit_logs`;

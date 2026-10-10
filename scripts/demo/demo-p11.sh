@@ -18,7 +18,7 @@ echo "$J" | grep -q "no-store" && ok "invitation preview: $J" || bad "invitation
 
 echo "== 2. private tenant data is never public-cacheable =="
 TOKEN=$(curl -s -X POST "$B/api/v1/auth/login" -H 'Content-Type: application/json' \
-  -d '{"email":"patron@libranet.app","password":"Patron12345!"}' | sed -n 's/.*"accessToken":"\([^"]*\)".*/\1/p')
+  -d '{"email":"patron@jotheca.app","password":"Patron12345!"}' | sed -n 's/.*"accessToken":"\([^"]*\)".*/\1/p')
 curl -s "$B/api/v1/tenant/catalog/books" -H "Authorization: Bearer $TOKEN" -H "X-Library-Id: LIB-AC2026" -D /tmp/p11.h >/dev/null
 if grep -i '^cache-control' /tmp/p11.h | grep -q public; then bad "tenant catalog publicly cacheable"; else ok "tenant catalog has no public caching"; fi
 

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>LibraNet — demo client</title>
+<title>J’otheca — demo client</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
   :root { --indigo:#4F46E5; --indigo-d:#3730A3; --bg:#F8FAFC; --card:#FFFFFF; --ink:#0F172A;
@@ -84,7 +84,7 @@
 </head>
 <body>
 <header class="bar">
-  <b>📚 LibraNet</b> <span style="opacity:.75;font-size:13px">demo web mirror — all roles</span>
+  <b>📚 J’otheca</b> <span style="opacity:.75;font-size:13px">demo web mirror — all roles</span>
   <div class="who">
     <span id="whoRole" class="rolebadge hidden"></span>
     <span id="whoName" class="hidden"></span>
@@ -114,12 +114,12 @@
 
 <script>
 const presets = [
-  {label:'👤 Patron — Accra Central', email:'patron@libranet.app', pw:'Patron12345!'},
-  {label:'🛠 Librarian — Pentecost Univ.', email:'staff@libranet.app', pw:'Library12345!'},
-  {label:'🧭 Library admin — Accra', email:'accraadmin@libranet.app', pw:'Library12345!'},
-  {label:'🧭 Library admin — Pentecost', email:'libadmin@libranet.app', pw:'Library12345!'},
-  {label:'✍️ Personal author', email:'author@libranet.app', pw:'Author12345!'},
-  {label:'🏛 Platform super admin', email:'admin@libranet.app', pw:'Admin12345!'},
+  {label:'👤 Patron — Accra Central', email:'patron@jotheca.app', pw:'Patron12345!'},
+  {label:'🛠 Librarian — Pentecost Univ.', email:'staff@jotheca.app', pw:'Library12345!'},
+  {label:'🧭 Library admin — Accra', email:'accraadmin@jotheca.app', pw:'Library12345!'},
+  {label:'🧭 Library admin — Pentecost', email:'libadmin@jotheca.app', pw:'Library12345!'},
+  {label:'✍️ Personal author', email:'author@jotheca.app', pw:'Author12345!'},
+  {label:'🏛 Platform super admin', email:'admin@jotheca.app', pw:'Admin12345!'},
 ];
 document.getElementById('acctBtns').innerHTML =
   presets.map((p,i)=>`<button class="mini" onclick="preset(${i})">${p.label}</button>`).join('');
@@ -620,7 +620,7 @@ async function loadThread(id, ref, staff){
   catch(e){ alert(e.message); return; }
   const msgs = (d.messages||[]).map(m => `
     <div class="tr"><div class="grow">
-      <div class="s">${esc(m.authorName || (m.system?'LibraNet assistant':'Member'))}
+      <div class="s">${esc(m.authorName || (m.system?'J’otheca assistant':'Member'))}
         ${m.internal?'<span class="chip red">internal</span>':''}${m.staffAuthored?'<span class="chip">staff</span>':''}</div>
       <div>${esc(m.body)}</div>
     </div><div class="s">${when(m.createdAt)}</div></div>`).join('');

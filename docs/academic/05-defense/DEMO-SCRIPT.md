@@ -1,15 +1,15 @@
 # Live demo script (3–4 minutes, rehearsed twice)
 
-Prep T-60 min: boot the app (`java -jar backend/target/libranet-backend-*.jar --spring.profiles.active=dev`),
+Prep T-60 min: boot the app (`java -jar backend/target/jotheca-backend-*.jar --spring.profiles.active=dev`),
 open Swagger UI, have curl snippets in a scratch file. If Wi-Fi fails, the videos/screen-recordings
 recorded during rehearsal are the fallback (record a full run). Seeded demo world:
 
 | Library | UID | Plan | Accounts (passwords) |
 | --- | --- | --- | --- |
-| Pentecost University | LIB-PU2026 | PROFESSIONAL | libadmin@libranet.app, staff@libranet.app (Library12345!) |
-| Accra Central Public | LIB-AC2026 | STARTER | accraadmin@, patron@libranet.app (Patron12345!) |
+| Pentecost University | LIB-PU2026 | PROFESSIONAL | libadmin@jotheca.app, staff@jotheca.app (Library12345!) |
+| Accra Central Public | LIB-AC2026 | STARTER | accraadmin@, patron@jotheca.app (Patron12345!) |
 | Ashesi University | LIB-AU2026 | ENTERPRISE | invite ASH-2026 (auto-approve join) |
-| Auntie Esi Writes (personal) | LIB-AW2026 | STARTER | author@libranet.app (Author12345!) |
+| Auntie Esi Writes (personal) | LIB-AW2026 | STARTER | author@jotheca.app (Author12345!) |
 
 **0:00–0:30 — The world.** Open the anonymous directory (`GET /api/v1/libraries`): four
 libraries, one platform. Point: "these four institutions share this database right now."

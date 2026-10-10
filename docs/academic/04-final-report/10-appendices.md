@@ -26,7 +26,7 @@ scripts/   bootstrap-tools, backup.sh, restore.sh, load-test.sh
 # full automated verification (120 tests; isolation suite included)
 cd backend && mvn test
 # boot + scripted live demos
-java -jar backend/target/libranet-backend-*.jar --spring.profiles.active=dev
+java -jar backend/target/jotheca-backend-*.jar --spring.profiles.active=dev
 bash demo-p10.sh   # AI: 14 checks                  bash demo-p11.sh  # hardening: 6 checks
 scripts/load-test.sh                                   # perf baselines (budgets in docs/PERF-BASELINE.md)
 ```

@@ -22,8 +22,13 @@ import '../features/author/author_profile_page.dart';
 import '../features/author/author_public_page.dart';
 import '../features/author/author_studio_page.dart';
 import 'session.dart';
+import 'api_client.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
+  // Install the session bridge ONCE so every ApiClient can refresh/expire the live session
+  // (audit D1/D3). ref.read (not watch) — this must not rebuild the router on session change.
+  ApiClient.refreshBridge = () => ref.read(sessionProvider.notifier).refreshSession();
+  ApiClient.expiredBridge = () => ref.read(sessionProvider.notifier).signOut();
   // Build the GoRouter ONCE. Watching sessionProvider here would rebuild (and fully
   // remount) the navigator on every session change — that caused an infinite
   // reload loop (router rebuild → discovery refetch → setMemberships → router rebuild…).
@@ -61,10 +66,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/login', builder: (context, state) => const LoginPage()),
       GoRoute(path: '/register', builder: (context, state) => const RegisterPage()),
       GoRoute(path: '/discover', builder: (context, state) => const DiscoveryPage()),
-      // Deep link from invitation links/QR codes (spec §14): libranet.app/join/<slug>
+      // Deep link from invitation links/QR codes (spec §14): jotheca.app/join/<slug>
       GoRoute(path: '/join/:key', builder: (context, state) => InvitationPage(inviteKey: state.pathParameters['key']!)),
       GoRoute(path: '/join/library/:slug', builder: (context, state) => JoinPage(librarySlug: state.pathParameters['slug']!)),
-      // Public book pages (spec §24): libranet.app/book/<librarySlug>/<bookSlug> — no sign-in needed
+      // Public book pages (spec §24): jotheca.app/book/<librarySlug>/<bookSlug> — no sign-in needed
       GoRoute(
           path: '/book/:librarySlug/:bookSlug',
           builder: (context, state) => PublicBookPage(

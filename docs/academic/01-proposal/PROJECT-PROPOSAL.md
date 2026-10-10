@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| **Title** | LibraNet — A Secure Multi-Tenant SaaS Platform for Library Management with AI-Assisted Discovery |
+| **Title** | J’otheca — A Secure Multi-Tenant SaaS Platform for Library Management with AI-Assisted Discovery |
 | Student | Senyo-Dzattah Judah Agbemavor |
 | Index number | PUIT/23110016 |
 | Programme | BSc Information Technology |
@@ -40,7 +40,7 @@ against a subscription plan. Ghanaian fintech (Paystack) already supplies local-
 online payments [10]; a library platform can and should bill in cedi, per library, on plans
 an operator changes without a developer.
 
-This project — **LibraNet** — builds that platform: many libraries living in one deployment
+This project — **J’otheca** — builds that platform: many libraries living in one deployment
 as isolated tenants, with the full physical-first circulation loop, data-driven plans, and
 tenant-pinned AI discovery — and with tenant isolation verified by automated cross-tenant
 tests rather than asserted.
@@ -214,7 +214,7 @@ isolation; no AI demand insights for staff; no support for personal/author libra
 
 ### 6.6 Comparative summary and identified gap
 
-| Capability | Koha | Evergreen | FOLIO | Alma | WMS | **LibraNet (proposed)** |
+| Capability | Koha | Evergreen | FOLIO | Alma | WMS | **J’otheca (proposed)** |
 | --- | --- | --- | --- | --- | --- | --- |
 | Multi-tenant SaaS (shared schema) | ✗ | ✗ (consortium) | partial (hoster-internal) | vendor-only | vendor-only | ✓ + auditable |
 | Proven tenant isolation | n/a | ✗ | unaudited | vendor claim | vendor claim | ✓ automated 33-case suite + RLS |
@@ -225,7 +225,7 @@ isolation; no AI demand insights for staff; no support for personal/author libra
 
 The literature thus shows two mature families — deep but single-tenant open ILS, and closed
 cloud platforms — with the conjunction the project targets (open, audited multi-tenancy;
-local-plan billing; tenant-safe AI) unoccupied. That is LibraNet's contribution.
+local-plan billing; tenant-safe AI) unoccupied. That is J’otheca's contribution.
 
 ## 7. Methodology
 

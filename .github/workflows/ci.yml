@@ -45,12 +45,12 @@ jobs:
       postgres:
         image: pgvector/pgvector:pg16
         env:
-          POSTGRES_USER: libranet
+          POSTGRES_USER: jotheca
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: libranet
+          POSTGRES_DB: jotheca
         ports: ["5432:5432"]
         options: >-
-          --health-cmd "pg_isready -U libranet"
+          --health-cmd "pg_isready -U jotheca"
           --health-interval 5s --health-timeout 3s --health-retries 30
       redis:
         image: redis:7-alpine
@@ -75,8 +75,8 @@ jobs:
         working-directory: backend
         env:
           SPRING_PROFILES_ACTIVE: staging
-          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/libranet
-          SPRING_DATASOURCE_USERNAME: libranet
+          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/jotheca
+          SPRING_DATASOURCE_USERNAME: jotheca
           SPRING_DATASOURCE_PASSWORD: postgres
           APP_JWT_SECRET: ci-smoke-secret-ci-smoke-secret-ci-smoke-secret-ci01
           PUBLIC_BASE_URL: http://localhost:8080
@@ -85,7 +85,7 @@ jobs:
           SPRING_DATA_REDIS_HOST: localhost
           STORAGE_PROVIDER: memory
         run: |
-          nohup java -jar target/libranet-backend-*.jar > /tmp/app.log 2>&1 & echo $! > /tmp/app.pid
+          nohup java -jar target/jotheca-backend-*.jar > /tmp/app.log 2>&1 & echo $! > /tmp/app.pid
           for i in $(seq 1 60); do
             curl -sf localhost:8080/actuator/health && exit 0 || sleep 2
           done
@@ -94,13 +94,13 @@ jobs:
         run: |
           curl -sf localhost:8080/actuator/health | grep -q UP
           curl -sf "localhost:8080/api/v1/libraries" | grep -q totalElements
-          curl -sf localhost:8080/v3/api-docs | grep -q "LibraNet API"
+          curl -sf localhost:8080/v3/api-docs | grep -q "J’otheca API"
           curl -sf -X POST localhost:8080/api/v1/auth/register \
             -H 'Content-Type: application/json' \
-            -d '{"email":"ci@libranet.dev","password":"CiSmoke12345!","fullName":"CI Smoke"}'
+            -d '{"email":"ci@jotheca.dev","password":"CiSmoke12345!","fullName":"CI Smoke"}'
       - name: PG-only migrations actually landed (RLS + HNSW + trigram + RLS enabled)
         run: |
-          PG="docker exec -e PGPASSWORD=postgres $(docker ps -qf ancestor=pgvector/pgvector:pg16) psql -U libranet -d libranet -At"
+          PG="docker exec -e PGPASSWORD=postgres $(docker ps -qf ancestor=pgvector/pgvector:pg16) psql -U jotheca -d jotheca -At"
           HNSW=$($PG -c "SELECT COUNT(*) FROM pg_indexes WHERE indexname = 'idx_book_embeddings_hnsw'")
           TRGM=$($PG -c "SELECT COUNT(*) FROM pg_indexes WHERE indexname LIKE '%_trgm'")
           RLS=$($PG -c "SELECT COUNT(*) FROM pg_policies WHERE policyname LIKE '%_tenant_isolation'")

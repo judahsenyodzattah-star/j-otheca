@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:libranet_app/features/settings/settings_page.dart';
+import 'package:jotheca_app/features/settings/settings_page.dart';
 
 /// Audit P1·E6 — the role-filtered settings registry contract (spec §9/§11). Sections
 /// are navigation only; backend authorization guards every mutation independently.
