@@ -3,12 +3,12 @@
 **Status:** Accepted (2026-08-10) · **Phase:** 0
 
 ## Context
-LibraNet targets many small tenants (author/personal libraries) alongside institutions.
+J’otheca targets many small tenants (author/personal libraries) alongside institutions.
 The V1 scaling unit is tenant count, not datastore throughput.
 
 ## Decision
 One Spring Boot application, packaged **by feature** (`identity`, `tenancy`, `membership`,
-`platform`, `catalog`, …) under `com.libranet`. Module boundaries are strict (no cross-package
+`platform`, `catalog`, …) under `com.jotheca`. Module boundaries are strict (no cross-package
 entity leakage; DTOs at the edge) so any module can later be extracted into a service.
 
 ## Consequences

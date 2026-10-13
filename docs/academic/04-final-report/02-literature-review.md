@@ -23,7 +23,7 @@ customisability. Krebs et al. [12] show empirically that naive shared-schema sys
 these. Defence options layer: application predicates; framework filters [13];
 and engine-level row-level security in PostgreSQL, to which pgvector adds vector search over
 the same relational plane [14]. The literature's open item is
-*proof*: isolation is usually argued, rarely regression-tested — LibraNet's 33-case negative
+*proof*: isolation is usually argued, rarely regression-tested — J’otheca's 33-case negative
 suite directly answers this gap.
 
 ## 2.3 The commercial thread
@@ -48,12 +48,12 @@ enable natural-language search; deployed library search additionally requires ha
 OWASP Top 10 maps to controls [3]; professional norms add patron-privacy
 requirements — behavioural data minimisation, anonymity options (American Library
 Association, 2019; Wan et al., 2019). Multi-tenant platforms must scope even telemetry:
-LibraNet stores search events and AI usage under the tenant key and bans question text from
+J’otheca stores search events and AI usage under the tenant key and bans question text from
 audit (asserted by test).
 
 ## 2.6 Synthesis
 
-| Capability | OSS ILS | Hosted ILS | SaaS patterns | LibraNet |
+| Capability | OSS ILS | Hosted ILS | SaaS patterns | J’otheca |
 | --- | --- | --- | --- | --- |
 | Shared-schema multi-tenancy | ✗ | partial | ✓ | ✓ + RLS on every tenant table |
 | Isolation *proof* | n/a | unauditable | argued | **33 negative cases in CI** |
@@ -62,4 +62,4 @@ audit (asserted by test).
 | Tenant-pinned metered AI | ✗ | ✗ | ✗ | ✓ |
 | Privacy-by-design audit | rare | unknown | rare | ✓ (no secrets/question-text) |
 
-LibraNet's claim is therefore not novelty in any single row but the verified conjunction.
+J’otheca's claim is therefore not novelty in any single row but the verified conjunction.

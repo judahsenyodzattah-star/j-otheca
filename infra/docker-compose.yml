@@ -1,19 +1,25 @@
-name: libranet-complete
+name: jotheca-complete
 
 services:
 
   postgres:
     image: pgvector/pgvector:pg16
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-libranet}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-libranet}
-      POSTGRES_DB: ${POSTGRES_DB:-libranet}
+      POSTGRES_USER: ${POSTGRES_USER:-jotheca}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-jotheca}
+      POSTGRES_DB: ${POSTGRES_DB:-jotheca}
+      # Phase A least-privilege runtime roles. Secrets from .env/secret manager; defaults are DEV ONLY
+      # (mirror the POSTGRES_PASSWORD:-jotheca pattern) — override in staging/prod. No secret in VCS.
+      JOTHECA_MIGRATE_PW: ${JOTHECA_MIGRATE_PW:-jotheca_migrate}
+      JOTHECA_APP_PW: ${JOTHECA_APP_PW:-jotheca_app}
+      JOTHECA_READALL_PW: ${JOTHECA_READALL_PW:-jotheca_readall}
     ports:
       - "5532:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./db/provision-roles.sh:/docker-entrypoint-initdb.d/10-provision-roles.sh:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U libranet"]
+      test: ["CMD-SHELL", "pg_isready -U jotheca"]
       interval: 5s
       retries: 20
 
@@ -34,8 +40,8 @@ services:
     image: minio/minio:latest
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-libranet}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-libranet-secret-change-me}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-jotheca}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-jotheca-secret-change-me}
     ports:
       - "9102:9000"
       - "9103:9001"
@@ -106,9 +112,19 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: staging
 
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-libranet}
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-libranet}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-jotheca}
+      # Defaults preserve current behavior (single owner role). Restricted-role cutover (Phase A):
+      # set APP_RUNTIME_DB_USER=jotheca_app + APP_RUNTIME_DB_PASSWORD=<secret> + APP_RESTRICTED_ROLE=true,
+      # and merge the platform-plane routing (jotheca_readall) first. Flyway stays the owner/migration role.
+      SPRING_DATASOURCE_USERNAME: ${APP_RUNTIME_DB_USER:-${POSTGRES_USER:-jotheca}}
+      SPRING_DATASOURCE_PASSWORD: ${APP_RUNTIME_DB_PASSWORD:-${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}}
+      SPRING_FLYWAY_USERNAME: ${APP_FLYWAY_DB_USER:-${POSTGRES_USER:-jotheca}}
+      SPRING_FLYWAY_PASSWORD: ${APP_FLYWAY_DB_PASSWORD:-${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}}
+      APP_RESTRICTED_ROLE: ${APP_RESTRICTED_ROLE:-false}
+      APP_RATE_LIMIT_TRUSTED_PROXIES: ${APP_RATE_LIMIT_TRUSTED_PROXIES:-}
+      # Platform-plane READ pool (used only when APP_RESTRICTED_ROLE=true). Secrets from .env; dev defaults only.
+      APP_PLATFORM_READ_DB_USER: ${APP_PLATFORM_READ_DB_USER:-jotheca_readall}
+      APP_PLATFORM_READ_DB_PASSWORD: ${APP_PLATFORM_READ_DB_PASSWORD:-${JOTHECA_READALL_PW:-jotheca_readall}}
 
       APP_JWT_SECRET: ${APP_JWT_SECRET:?set APP_JWT_SECRET in .env}
 
@@ -123,7 +139,7 @@ services:
       MINIO_ENDPOINT: http://minio:9000
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER in .env}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD in .env}
-      MINIO_BUCKET: ${MINIO_BUCKET:-libranet-media}
+      MINIO_BUCKET: ${MINIO_BUCKET:-jotheca-media}
 
       MAIL_HOST: mailpit
       MAIL_PORT: 1025
@@ -156,16 +172,16 @@ services:
 
 volumes:
   pgdata:
-    name: libranet-complete_pgdata
+    name: jotheca-complete_pgdata
 
   redisdata:
-    name: libranet-complete_redisdata
+    name: jotheca-complete_redisdata
 
   miniodata:
-    name: libranet-complete_miniodata
+    name: jotheca-complete_miniodata
 
   chromadata:
-    name: libranet-complete_chromadata
+    name: jotheca-complete_chromadata
 
   sbert-cache:
-    name: libranet-complete_sbert-cache
+    name: jotheca-complete_sbert-cache

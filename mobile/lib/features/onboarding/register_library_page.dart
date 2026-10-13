@@ -112,7 +112,7 @@ class _RegisterLibraryPageState extends ConsumerState<RegisterLibraryPage> {
     return Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       const Icon(Icons.domain_add_outlined, size: 48),
       const SizedBox(height: 12),
-      Text('Registering a library needs a LibraNet account.',
+      Text('Registering a library needs a J’otheca account.',
           style: Theme.of(context).textTheme.titleMedium, textAlign: TextAlign.center),
       const SizedBox(height: 8),
       const Text(
@@ -121,7 +121,7 @@ class _RegisterLibraryPageState extends ConsumerState<RegisterLibraryPage> {
         textAlign: TextAlign.center,
       ),
       const SizedBox(height: 20),
-      FilledButton(onPressed: () => context.go('/register'), child: const Text('Join LibraNet')),
+      FilledButton(onPressed: () => context.go('/register'), child: const Text('Join J’otheca')),
       const SizedBox(height: 8),
       OutlinedButton(onPressed: () => context.go('/login'), child: const Text('Sign in')),
     ]);

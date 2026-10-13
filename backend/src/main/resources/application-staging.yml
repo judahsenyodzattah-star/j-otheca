@@ -7,6 +7,17 @@ spring:
       host: ${SPRING_DATA_REDIS_HOST:localhost}
       port: ${SPRING_DATA_REDIS_PORT:6379}
       timeout: 2s
+  # Phase A tenant-isolation remediation: Flyway authenticates as the MIGRATION role, separate from the
+  # runtime datasource role. Both default to the datasource credentials, so behavior is UNCHANGED until
+  # SPRING_FLYWAY_USERNAME/PASSWORD are set (staging/prod restricted-role rollout). No secrets here.
+  flyway:
+    # L4: bind the URL explicitly instead of letting Flyway inherit spring.datasource.url implicitly.
+    # The default is still the datasource URL, so behavior is unchanged, but SPRING_FLYWAY_URL now
+    # actually takes effect (it was previously accepted and ignored) and the migration connection
+    # stays on the intended database even if spring.datasource.url is later repointed.
+    url: ${SPRING_FLYWAY_URL:${SPRING_DATASOURCE_URL}}
+    user: ${SPRING_FLYWAY_USERNAME:${SPRING_DATASOURCE_USERNAME}}
+    password: ${SPRING_FLYWAY_PASSWORD:${SPRING_DATASOURCE_PASSWORD}}
   mail:
     host: ${MAIL_HOST:localhost}
     port: ${MAIL_PORT:1025}
@@ -18,11 +29,23 @@ spring:
 
 app:
   public-base-url: ${PUBLIC_BASE_URL:}            # REQUIRED — share URLs / deep links build from it
+  datasource:
+    # Phase A: true => runtime datasource uses the least-privilege jotheca_app role (NOBYPASSRLS, RLS
+    # enforced) and the platform plane uses jotheca_readall; false => current single owner-role behavior.
+    # Opt-in cutover switch, default false. Requires the roles to be provisioned (infra/db/provision-roles.sh).
+    restricted-role: ${APP_RESTRICTED_ROLE:false}
+    # Platform-plane pools (used only when restricted-role=true). Secrets from env; no defaults committed.
+    platform-read:
+      username: ${APP_PLATFORM_READ_DB_USER:jotheca_readall}
+      password: ${APP_PLATFORM_READ_DB_PASSWORD:}
   cors-allowed-origin-patterns: ${CORS_ORIGINS:}  # REQUIRED — no wildcard outside dev
   rate-limit:
     backend: redis                                # multi-instance safe throttling
+    trusted-proxies: ${APP_RATE_LIMIT_TRUSTED_PROXIES:}   # Phase A (R2): trusted ingress IPs; empty => X-Forwarded-For ignored
   storage:
     provider: minio                               # durable object storage (MINIO_* env)
+  payments:
+    provider: paystack                            # real PSP; requires PAYSTACK_SECRET_KEY (never silent mock)
   ai:
     embedder: ${AI_EMBEDDER:local}
     search:

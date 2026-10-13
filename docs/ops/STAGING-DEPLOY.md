@@ -30,7 +30,7 @@ Secrets have **no defaults** — compose refuses to start with `${VAR:?}` errors
 cd infra
 docker compose up -d postgres redis minio mailpit   # infra first
 docker compose --profile full up -d backend          # builds + starts the API (runs Flyway V1–V19)
-docker compose logs -f backend                       # wait for "Started LibraNetApplication"
+docker compose logs -f backend                       # wait for "Started JothecaApplication"
 ```
 
 ## 4. Verify (the Day-1 gate)
@@ -42,13 +42,13 @@ docker compose logs -f backend                       # wait for "Started LibraNe
    SELECT COUNT(*) FROM pg_indexes WHERE indexname LIKE '%_trgm';                -- 4
    SELECT COUNT(*) FROM pg_policies WHERE policyname LIKE '%_tenant_isolation';  -- >= 25
    ```
-3. **Smoke**: `BASE_URL=https://staging.libranet.app bash demo-p11.sh` (cache headers,
+3. **Smoke**: `BASE_URL=https://staging.jotheca.app bash demo-p11.sh` (cache headers,
    OpenAPI envelope, health) — must pass 6/6.
 4. **Backups armed**: schedule `scripts/backup.sh` nightly (cron example below), then run the
    **P11 restore drill immediately** against a fresh `TARGET_DB` — sign off in
    `docs/ops/BACKUP-AND-RESTORE.md`.
    ```cron
-   0 3 * * * DATABASE_URL=... MINIO_DATA_DIR=... BACKUP_DIR=/backups /opt/libranet/scripts/backup.sh >> /var/log/libranet-backup.log 2>&1
+   0 3 * * * DATABASE_URL=... MINIO_DATA_DIR=... BACKUP_DIR=/backups /opt/jotheca/scripts/backup.sh >> /var/log/jotheca-backup.log 2>&1
    ```
 5. **TLS**: terminate at the edge (Caddy/ALB); the API stays plain HTTP inside the network.
    Update `PUBLIC_BASE_URL`/`CORS_ORIGINS` to the https origins at the same time.

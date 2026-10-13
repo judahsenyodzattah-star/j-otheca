@@ -1,4 +1,4 @@
-# LibraNet — A Secure Multi-Tenant SaaS Platform for Library Management with AI-Assisted Discovery
+# J’otheca — A Secure Multi-Tenant SaaS Platform for Library Management with AI-Assisted Discovery
 
 *Pentecost University*
 
@@ -29,7 +29,7 @@ Signed: …………………………  Date: ………………
 Small libraries are priced or skilled out of professional library software: open-source
 integrated library systems assume one installation per institution and an administrator to
 run it, while hosted offerings are closed and per-institution priced. This dissertation
-presents **LibraNet**, a multi-tenant software-as-a-service platform in which many libraries
+presents **J’otheca**, a multi-tenant software-as-a-service platform in which many libraries
 share one deployment as isolated tenants — covering identity and membership, plan-metered
 subscriptions with billing on African payment rails, physical-first circulation with barcoded
 desk flows, author-owned personal libraries with public book pages, media, ratings and
@@ -101,11 +101,11 @@ privacy discipline as everything else, while being affordable: metered against a
 Recapped from the approved proposal: no open platform combines (a) genuine, auditable
 multi-tenant operation, (b) the complete physical-first circulation loop, (c) data-driven
 subscription plans with billing on African payment rails, and (d) tenant-safe, plan-metered
-AI discovery. LibraNet exists to close that conjunction.
+AI discovery. J’otheca exists to close that conjunction.
 
 ## 1.3 Aim and objectives
 
-**Aim.** To design, implement and rigorously verify LibraNet — a multi-tenant SaaS library
+**Aim.** To design, implement and rigorously verify J’otheca — a multi-tenant SaaS library
 platform whose tenant isolation is enforced at every architectural layer and proven by
 automated cross-tenant tests, with data-driven plan limits and tenant-pinned AI discovery.
 
@@ -144,7 +144,7 @@ in Chapters 5–6.
 
 ## 1.7 Chapter guide
 
-Chapter 2 reviews the literature and fixes LibraNet's position. Chapter 3 derives
+Chapter 2 reviews the literature and fixes J’otheca's position. Chapter 3 derives
 requirements. Chapter 4 presents the architecture and the nine isolation layers. Chapter 5
 describes implementation phase by phase. Chapter 6 is the testing story. Chapter 7 evaluates
 against the objectives and research questions with measured numbers. Chapter 8 concludes and
@@ -174,7 +174,7 @@ customisability. Krebs et al. [12] show empirically that naive shared-schema sys
 these. Defence options layer: application predicates; framework filters [13];
 and engine-level row-level security in PostgreSQL, to which pgvector adds vector search over
 the same relational plane [14]. The literature's open item is
-*proof*: isolation is usually argued, rarely regression-tested — LibraNet's 33-case negative
+*proof*: isolation is usually argued, rarely regression-tested — J’otheca's 33-case negative
 suite directly answers this gap.
 
 ## 2.3 The commercial thread
@@ -199,12 +199,12 @@ enable natural-language search; deployed library search additionally requires ha
 OWASP Top 10 maps to controls [3]; professional norms add patron-privacy
 requirements — behavioural data minimisation, anonymity options (American Library
 Association, 2019; Wan et al., 2019). Multi-tenant platforms must scope even telemetry:
-LibraNet stores search events and AI usage under the tenant key and bans question text from
+J’otheca stores search events and AI usage under the tenant key and bans question text from
 audit (asserted by test).
 
 ## 2.6 Synthesis
 
-| Capability | OSS ILS | Hosted ILS | SaaS patterns | LibraNet |
+| Capability | OSS ILS | Hosted ILS | SaaS patterns | J’otheca |
 | --- | --- | --- | --- | --- |
 | Shared-schema multi-tenancy | ✗ | partial | ✓ | ✓ + RLS on every tenant table |
 | Isolation *proof* | n/a | unauditable | argued | **33 negative cases in CI** |
@@ -213,7 +213,7 @@ audit (asserted by test).
 | Tenant-pinned metered AI | ✗ | ✗ | ✗ | ✓ |
 | Privacy-by-design audit | rare | unknown | rare | ✓ (no secrets/question-text) |
 
-LibraNet's claim is therefore not novelty in any single row but the verified conjunction.
+J’otheca's claim is therefore not novelty in any single row but the verified conjunction.
 # Chapter 3 — Requirements and analysis
 
 ## 3.1 Actors and roles
@@ -518,10 +518,10 @@ carry real marks.]
 
 ## 7.5 Comparison with existing systems
 
-Against the Chapter 2 gap table: Koha/Evergreen retain bibliographic depth LibraNet
+Against the Chapter 2 gap table: Koha/Evergreen retain bibliographic depth J’otheca
 deliberately omitted (MARC, ILL) — scope honesty; hosted consortia solve hosting but remain
 closed and unauditable; no reviewed system couples tenant-pinned AI with plan metering.
-LibraNet's delta is the *verified conjunction*.
+J’otheca's delta is the *verified conjunction*.
 
 ## 7.6 Limitations
 
@@ -691,7 +691,7 @@ scripts/   bootstrap-tools, backup.sh, restore.sh, load-test.sh
 # full automated verification (120 tests; isolation suite included)
 cd backend && mvn test
 # boot + scripted live demos
-java -jar backend/target/libranet-backend-*.jar --spring.profiles.active=dev
+java -jar backend/target/jotheca-backend-*.jar --spring.profiles.active=dev
 bash demo-p10.sh   # AI: 14 checks                  bash demo-p11.sh  # hardening: 6 checks
 scripts/load-test.sh                                   # perf baselines (budgets in docs/PERF-BASELINE.md)
 ```

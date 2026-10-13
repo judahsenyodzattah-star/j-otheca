@@ -7,8 +7,8 @@ pass=0; fail=0
 check() { if [ "$2" == "$3" ]; then pass=$((pass+1)); echo "  ✔ $1"; else fail=$((fail+1)); echo "  ✘ $1 (expected [$2] got [$3])"; fi; }
 
 echo "== 1. tokens =="
-PATRON=$(curl -s $BASE/api/v1/auth/login -H 'Content-Type: application/json' -d '{"email":"patron@libranet.app","password":"Patron12345!"}' | J "['accessToken']")
-LIBADMIN=$(curl -s $BASE/api/v1/auth/login -H 'Content-Type: application/json' -d '{"email":"libadmin@libranet.app","password":"Library12345!"}' | J "['accessToken']")
+PATRON=$(curl -s $BASE/api/v1/auth/login -H 'Content-Type: application/json' -d '{"email":"patron@jotheca.app","password":"Patron12345!"}' | J "['accessToken']")
+LIBADMIN=$(curl -s $BASE/api/v1/auth/login -H 'Content-Type: application/json' -d '{"email":"libadmin@jotheca.app","password":"Library12345!"}' | J "['accessToken']")
 [ ${#PATRON} -gt 100 ] && [ ${#LIBADMIN} -gt 100 ] && echo "  ✔ tokens" || exit 1
 
 echo "== 2. cold start: embeddings build lazily on first search (Accra) =="

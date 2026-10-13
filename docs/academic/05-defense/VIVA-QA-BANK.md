@@ -72,8 +72,8 @@
 
 ## Domain & evaluation
 
-21. **What does Koha do that LibraNet doesn't?** MARC cataloguing, Z39.50, inter-library
-    loan, acquisitions ledgers — deliberately out of scope; LibraNet's delta is verified
+21. **What does Koha do that J’otheca doesn't?** MARC cataloguing, Z39.50, inter-library
+    loan, acquisitions ledgers — deliberately out of scope; J’otheca's delta is verified
     tenancy + AI + SaaS operation.
 22. **How do you evaluate "good" recommendations at library scale?** Precision@k offline on
     interaction logs once real tenants exist; today: in-domain assertion tests + design

@@ -13,7 +13,7 @@ class StaffPermDef {
   final bool librarianDefault;
 }
 
-/// Must mirror `com.libranet.permissions.model.LibraryPerm` exactly.
+/// Must mirror `com.jotheca.permissions.model.LibraryPerm` exactly.
 const staffPermCatalog = <StaffPermDef>[
   StaffPermDef('CATALOG_MANAGE', 'Catalog & copies', false),
   StaffPermDef('CIRCULATION_OPS', 'Circulation desk', true),

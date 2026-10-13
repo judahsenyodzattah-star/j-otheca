@@ -1,4 +1,4 @@
-# LibraNet — Final Year Project academic pack
+# J’otheca — Final Year Project academic pack
 
 Everything needed from proposal to defense, in submission order. All documents are
 Markdown masters (version-controlled); convert any of them to Word for submission:

@@ -59,7 +59,7 @@ class _AuthorStudioPageState extends ConsumerState<AuthorStudioPage> {
             const SizedBox(height: 6),
             const Text(
               'Open an author profile on this same account — pick your pen name, publish a '
-              'public page when you\'re ready, and watch how your books do across LibraNet '
+              'public page when you\'re ready, and watch how your books do across J’otheca '
               'libraries. Nothing is published until you flip the switch.',
               textAlign: TextAlign.center,
             ),

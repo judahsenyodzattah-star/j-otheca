@@ -53,7 +53,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             child: Form(
               key: _formKey,
               child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                Text('LibraNet', style: Theme.of(context).textTheme.headlineMedium),
+                Text('J’otheca', style: Theme.of(context).textTheme.headlineMedium),
                 const SizedBox(height: 4),
                 Text('One account. Every library.', style: Theme.of(context).textTheme.bodyMedium),
                 const SizedBox(height: 32),
@@ -87,7 +87,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                 OutlinedButton.icon(
                   icon: const Icon(Icons.person_add_alt_1),
                   onPressed: () => context.go('/register'),
-                  label: const Text('Join LibraNet'),
+                  label: const Text('Join J’otheca'),
                 ),
                 const SizedBox(height: 8),
                 OutlinedButton.icon(

@@ -1,7 +1,7 @@
 # Release verification — 2026-08-11
 
 Checklist executed against `docs/RELEASE-CHECKLIST.md`, dev instance (H2, port 8080),
-jar `libranet-backend-0.1.0-SNAPSHOT` (sha: built 13:49 UTC), all 19 Flyway migrations
+jar `jotheca-backend-0.1.0-SNAPSHOT` (sha: built 13:49 UTC), all 19 Flyway migrations
 applied on boot.
 
 **Verdict: ✅ GO for staging.** Production go requires the three staging/CI items listed

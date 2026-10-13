@@ -1,10 +1,10 @@
-# LibraNet UX / Role / AI Audit Specification (as received 2026-08-13)
+# J’otheca UX / Role / AI Audit Specification (as received 2026-08-13)
 
 > Source: product-owner specification pasted into the project conversation on 2026-08-13.
 > Audit response: `AUDIT-UX-ROLE-AI-2026-08-13.md`. This file preserves the contract verbatim (condensed formatting).
 
 ## Purpose
-Audit the existing LibraNet application against the UX and interaction requirements. This is an audit and implementation specification, not a rebuild request: inspect first, preserve working functionality, change only what's necessary.
+Audit the existing J’otheca application against the UX and interaction requirements. This is an audit and implementation specification, not a rebuild request: inspect first, preserve working functionality, change only what's necessary.
 
 ## 1. Core UX principle
 One coherent platform: shared design system + shared components + **role-specific workflows and dashboards**. Not one generic dashboard with buttons hidden; not separate apps per role. Experience/navigation/dashboards/actions/settings adapt to role, permissions, and current library context.
@@ -13,7 +13,7 @@ One coherent platform: shared design system + shared components + **role-specifi
 Distinguish: personal account; library/organization registration; library membership; role within a library; author capability/profile; optional commerce/seller capability. No single forced global role. A user can be Patron + Author + (Librarian at library B). An author may also be a patron.
 
 ## 3. Registration UX
-Entry screen: [ Join LibraNet ] vs [ Register a Library ] — never infer library registration from personal fields.
+Entry screen: [ Join J’otheca ] vs [ Register a Library ] — never infer library registration from personal fields.
 - 3.1 Personal: full name, email, password, confirm password; **eye visibility toggles on both, independently**.
 - 3.2 Library: separate flow — library details → administrator details → plan → payment → created → founder becomes Library Admin (never self-selected "Admin").
 - 3.3 Librarian: not self-selectable; via invitation/assignment by library admin.
@@ -45,7 +45,7 @@ Role-aware, visually consistent, **not one flat list**. Desktop: left settings s
 - Author: personal + author profile (pen name, bio, photo, genres, languages, links, publishing info, privacy).
 
 ## 10. Visual design
-Modern SaaS: rounded cards, strong typography, subtle borders, spacing, consistent icons, restrained color, strong primary buttons, light/dark, accessible contrast. LibraNet identity across all roles; admin may be denser.
+Modern SaaS: rounded cards, strong typography, subtle borders, spacing, consistent icons, restrained color, strong primary buttons, light/dark, accessible contrast. J’otheca identity across all roles; admin may be denser.
 
 ## 11. Mobile settings
 Grouped mobile list (ACCOUNT/LIBRARY/PRIVACY sections) — never the desktop sidebar.

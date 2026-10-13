@@ -1,7 +1,9 @@
 import 'dart:convert';
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'models.dart';
+import 'api_client.dart';
 
 /// Global session: tokens + user + the currently active library (its UID, shown as
 /// X-Library-Id). Persisted across launches; refresh rotation is handled by the API layer.
@@ -42,7 +44,7 @@ class SessionState {
 }
 
 class SessionController extends Notifier<SessionState> {
-  static const _key = 'libranet.session.v1';
+  static const _key = 'jotheca.session.v1';
 
   @override
   SessionState build() {
@@ -95,6 +97,40 @@ class SessionController extends Notifier<SessionState> {
 
   void switchLibrary(String uid) => state = state.copyWith(activeLibraryUid: uid);
 
+  /// Refresh the access token with the stored refresh token (audit D1). Persists the
+  /// rotated pair and keeps the current user/memberships. Returns null on any failure
+  /// (expired / reused / offline) so the caller can expire the session. The backend
+  /// rotates the refresh token and detects reuse, so a single refresh call is enough.
+  Future<AuthTokens?> refreshSession() async {
+    final rt = state.refreshToken;
+    if (rt == null) return null;
+    try {
+      final dio = Dio(BaseOptions(
+        baseUrl: ApiClient.defaultBaseUrl(),
+        connectTimeout: const Duration(seconds: 10),
+        receiveTimeout: const Duration(seconds: 20),
+      ));
+      final res = await dio.post<dynamic>('/api/v1/auth/refresh', data: {'refreshToken': rt});
+      final data = Map<String, dynamic>.from(res.data as Map);
+      final tokens = AuthTokens(
+        accessToken: data['accessToken'] as String,
+        refreshToken: data['refreshToken'] as String,
+        expiresInSeconds: data['expiresInSeconds'] as int);
+      state = state.copyWith(accessToken: tokens.accessToken, refreshToken: tokens.refreshToken);
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_key);
+      if (raw != null) {
+        final j = jsonDecode(raw) as Map<String, dynamic>;
+        j['accessToken'] = tokens.accessToken;
+        j['refreshToken'] = tokens.refreshToken;
+        await prefs.setString(_key, jsonEncode(j));
+      }
+      return tokens;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Persist an updated profile (settings → Account → edit).
   Future<void> updateUser(AppUser user) async {
     state = state.copyWith(user: user);
@@ -111,9 +147,21 @@ class SessionController extends Notifier<SessionState> {
   }
 
   Future<void> signOut() async {
+    final rt = state.refreshToken;
     state = const SessionState();
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_key);
+    // Best-effort server-side revocation (audit D3): kill the refresh session so a token
+    // copied off a shared/lost device can't mint new access tokens for up to 14 days.
+    // The local session is cleared regardless of the network result.
+    if (rt != null) {
+      try {
+        final dio = Dio(BaseOptions(baseUrl: ApiClient.defaultBaseUrl()));
+        await dio.post<dynamic>('/api/v1/auth/logout', data: {'refreshToken': rt});
+      } catch (_) {
+        // offline/expired — the local session is already gone
+      }
+    }
   }
 }
 

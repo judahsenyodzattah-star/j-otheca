@@ -23,7 +23,7 @@ final _publicReviewsProvider = FutureProvider.autoDispose
   return content.map((e) => Map<String, dynamic>.from(e as Map)).toList();
 });
 
-/// The public, shareable book page (spec §24: libranet.app/book/`<library>`/`<book>`).
+/// The public, shareable book page (spec §24: jotheca.app/book/`<library>`/`<book>`).
 /// No sign-in required. Anonymous visitors get a "join" call-to-action.
 class PublicBookPage extends ConsumerWidget {
   const PublicBookPage({super.key, required this.librarySlug, required this.bookSlug});

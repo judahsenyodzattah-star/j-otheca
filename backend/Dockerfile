@@ -9,8 +9,8 @@ RUN mvn -q -B -DskipTests package
 # ---------- run ----------
 FROM eclipse-temurin:21-jre
 WORKDIR /app
-RUN useradd -r -u 10001 libranet
-COPY --from=build /app/target/libranet-backend-0.1.0-SNAPSHOT.jar app.jar
-USER libranet
+RUN useradd -r -u 10001 jotheca
+COPY --from=build /app/target/jotheca-backend-0.1.0-SNAPSHOT.jar app.jar
+USER jotheca
 EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "app.jar"]

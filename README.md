@@ -1,4 +1,4 @@
-# LibraNet
+# J’otheca
 
 Intelligent, secure, **multi-tenant SaaS library ecosystem** — physical-book first, with global user accounts joining many libraries through **memberships**.
 
@@ -38,19 +38,19 @@ The `dev` profile uses H2 (Postgres mode) so the app runs with no Docker. **Note
 
 | Account | Password | Purpose |
 |---|---|---|
-| `admin@libranet.app` | `Admin12345!` | SUPER_ADMIN (platform console) |
-| `libadmin@libranet.app` | `Library12345!` | LIBRARY_ADMIN of *Pentecost University Library* |
-| `staff@libranet.app` | `Library12345!` | LIBRARIAN of *Pentecost University Library* |
-| `patron@libranet.app` | `Patron12345!` | member of *Accra Central Public Library* |
-| `accraadmin@libranet.app` | `Library12345!` | LIBRARY_ADMIN of *Accra Central Public Library* |
-| `author@libranet.app` | `Author12345!` | owner of *Auntie Esi Writes* (PERSONAL author library) |
+| `admin@jotheca.app` | `Admin12345!` | SUPER_ADMIN (platform console) |
+| `libadmin@jotheca.app` | `Library12345!` | LIBRARY_ADMIN of *Pentecost University Library* |
+| `staff@jotheca.app` | `Library12345!` | LIBRARIAN of *Pentecost University Library* |
+| `patron@jotheca.app` | `Patron12345!` | member of *Accra Central Public Library* |
+| `accraadmin@jotheca.app` | `Library12345!` | LIBRARY_ADMIN of *Accra Central Public Library* |
+| `author@jotheca.app` | `Author12345!` | owner of *Auntie Esi Writes* (PERSONAL author library) |
 
 Seeded libraries: `pentecost` (APPROVAL_REQUIRED) · `accra-central` (PUBLIC) · `ashesi` (INVITATION_ONLY, code `ASH-2026`).
 
 ## Layout
 
 ```
-backend/   Spring Boot modular monolith (package-by-feature inside com.libranet)
+backend/   Spring Boot modular monolith (package-by-feature inside com.jotheca)
 mobile/    Flutter app (Android/iOS) that also builds the web app
 infra/     docker-compose + env templates
 docs/      architecture roadmap + ADRs

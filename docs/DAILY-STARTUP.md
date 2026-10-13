@@ -1,4 +1,4 @@
-# LibraNet — Everyday Startup Card
+# J’otheca — Everyday Startup Card
 
 The 30-second version. Full tool inventory: `TOOLS-AND-COMMANDS.md` · First-time setup: `RUN-LOCALLY.md`.
 
@@ -7,11 +7,11 @@ The 30-second version. Full tool inventory: `TOOLS-AND-COMMANDS.md` · First-tim
 ## A. Normal dev day (your laptop)
 
 ```bash
-cd libranet/backend
-java -jar target/libranet-backend-0.1.0-SNAPSHOT.jar --spring.profiles.active=dev
+cd jotheca/backend
+java -jar target/jotheca-backend-0.1.0-SNAPSHOT.jar --spring.profiles.active=dev
 ```
 
-Then open **http://localhost:8080** → sign in `patron@libranet.app` / `Patron12345!`.
+Then open **http://localhost:8080** → sign in `patron@jotheca.app` / `Patron12345!`.
 Stop with `Ctrl+C`. No database or service to start — dev mode is fully self-contained
 (H2 in-memory, so data **reseeds on every restart** — that's normal).
 
@@ -32,7 +32,7 @@ mvn verify                     # all 151 tests must stay green
 Terminal 1 → backend (block A). Terminal 2:
 
 ```bash
-cd libranet/mobile
+cd jotheca/mobile
 flutter run -d chrome                              # web
 flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8080   # Android emulator
 ```
@@ -40,16 +40,16 @@ flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8080   # Android emulator
 ## C. Production-like day (staging, optional)
 
 ```bash
-cd libranet/infra && docker compose up -d          # postgres+redis+minio+mailpit
+cd jotheca/infra && docker compose up -d          # postgres+redis+minio+mailpit
 cd ../backend
-java -jar target/libranet-backend-0.1.0-SNAPSHOT.jar --spring.profiles.active=staging
+java -jar target/jotheca-backend-0.1.0-SNAPSHOT.jar --spring.profiles.active=staging
 # mail inbox → http://localhost:8025   ·   when done: docker compose down
 ```
 
 ## C2. Docker-first day (everything containerized — one command, like the old prototype)
 
 ```bash
-cd libranet/infra
+cd jotheca/infra
 docker compose --profile full up -d                # postgres+redis+minio+mailpit+backend
 # → http://localhost:8080 (app) · http://localhost:8025 (mailpit)
 docker compose logs -f backend                     # watch the API boot/migrate
@@ -66,10 +66,10 @@ Data lives in named volumes (`pgdata`, `miniodata`, `redisdata`) — never in re
 Build outputs don't persist between sandbox sessions, so each new session:
 
 ```bash
-source libranet/scripts/bootstrap-tools.sh
-cd libranet/backend && mvn -q -DskipTests package
+source jotheca/scripts/bootstrap-tools.sh
+cd jotheca/backend && mvn -q -DskipTests package
 export JAVA_HOME=/home/user/.cache/tools/jdk21
-$JAVA_HOME/bin/java -jar target/libranet-backend-0.1.0-SNAPSHOT.jar --spring.profiles.active=dev
+$JAVA_HOME/bin/java -jar target/jotheca-backend-0.1.0-SNAPSHOT.jar --spring.profiles.active=dev
 ```
 
 ---
@@ -78,10 +78,10 @@ $JAVA_HOME/bin/java -jar target/libranet-backend-0.1.0-SNAPSHOT.jar --spring.pro
 
 | Who | Email / password | What you get |
 |---|---|---|
-| Member demo | patron@libranet.app / `Patron12345!` | Home card+QR, Discover/join, Catalog, **My books**, AI |
-| Staff demo | staff@libranet.app / `Library12345!` | all of the above **+ 🛠 Circulation desk** + staff AI |
-| Library admin | accraadmin@libranet.app / `Library12345!` | all of the above **+ 🧭 Manage** (members, catalog, policy) |
-| Platform admin | admin@libranet.app / `Admin12345!` | **🏛 Platform console only** (libraries, onboarding, plans, payments) — no tenant ops by design |
+| Member demo | patron@jotheca.app / `Patron12345!` | Home card+QR, Discover/join, Catalog, **My books**, AI |
+| Staff demo | staff@jotheca.app / `Library12345!` | all of the above **+ 🛠 Circulation desk** + staff AI |
+| Library admin | accraadmin@jotheca.app / `Library12345!` | all of the above **+ 🧭 Manage** (members, catalog, policy) |
+| Platform admin | admin@jotheca.app / `Admin12345!` | **🏛 Platform console only** (libraries, onboarding, plans, payments) — no tenant ops by design |
 
 Join code for the Discover flow: **ASH-2026**.
 

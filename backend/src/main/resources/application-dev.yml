@@ -2,7 +2,7 @@
 # Postgres RLS defense layer self-activates only on real Postgres; all other isolation layers stay on.
 spring:
   datasource:
-    url: jdbc:h2:mem:libranet;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
+    url: jdbc:h2:mem:jotheca;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
     driver-class-name: org.h2.Driver
     username: sa
     password: ""

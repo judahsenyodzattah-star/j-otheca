@@ -1,4 +1,4 @@
-# Interim (Progress) Report — LibraNet
+# Interim (Progress) Report — J’otheca
 
 *Senyo-Dzattah Judah Agbemavor · PUIT/23110016 · [COURSE CODE] · Supervisor: [SUPERVISOR NAME] · [DATE]*
 

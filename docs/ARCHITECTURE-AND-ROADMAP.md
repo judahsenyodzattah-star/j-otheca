@@ -1,13 +1,13 @@
-# LibraNet — System Audit, Architecture & Phased Roadmap
+# J’otheca — System Audit, Architecture & Phased Roadmap
 
 **Status:** Planning baseline · v0.1 · 2026-08-10
-**Repository:** `libranet/` (greenfield — see §0)
+**Repository:** `jotheca/` (greenfield — see §0)
 
 ---
 
 ## 0. Audit Finding: Current State
 
-> **Important correction to the project brief.** The brief describes LibraNet as an *existing* project with a Spring Boot backend, Flutter app, migrations, AI services, and automated tests. **The workspace contained no code.** You confirmed we are starting from scratch.
+> **Important correction to the project brief.** The brief describes J’otheca as an *existing* project with a Spring Boot backend, Flutter app, migrations, AI services, and automated tests. **The workspace contained no code.** You confirmed we are starting from scratch.
 >
 > Consequence: the "do not rebuild / extend instead of replace" rule is applied *going forward* — we design clean boundaries now so that every future phase extends rather than rewrites. Nothing described in the brief is implemented yet; this document is the gap analysis: **the gap is 100% of the system**.
 
@@ -20,7 +20,7 @@ Everything below therefore covers two things:
 
 ## 1. Product Vision (fixed reference)
 
-> An intelligent, secure, **multi-tenant SaaS library ecosystem** serving university, school, public, private, corporate, research, personal, and author libraries — physical-book first, with a global user account connecting people to many libraries through **memberships**, and subscriptions flowing Library → LibraNet.
+> An intelligent, secure, **multi-tenant SaaS library ecosystem** serving university, school, public, private, corporate, research, personal, and author libraries — physical-book first, with a global user account connecting people to many libraries through **memberships**, and subscriptions flowing Library → J’otheca.
 
 Non-negotiables that constrain every design decision:
 
@@ -80,16 +80,16 @@ Non-negotiables that constrain every design decision:
 | Vector store | **pgvector** (recommended) | Tenant filter enforced by the same SQL engine already isolating tenants — removes the main cross-tenant-leak risk of a separate vector DB. Chroma remains a documented alternative. |
 | Push | Firebase Cloud Messaging | Required for iOS/Android push later |
 | Email | SMTP provider (dev: Mailpit) | Mailbox for approval/pickup/fine flows |
-| Payments | **Paystack** primary (GHS, cards, mobile money; excellent for Ghana), Stripe adapter optional | Library→LibraNet subscriptions; later Patron→Library via subaccounts/transfers |
+| Payments | **Paystack** primary (GHS, cards, mobile money; excellent for Ghana), Stripe adapter optional | Library→J’otheca subscriptions; later Patron→Library via subaccounts/transfers |
 | Backend tests | JUnit 5, Testcontainers, Spring Security Test | Isolation test harness (§10) |
 | Frontend | **Flutter 3 / Dart 3**, **Riverpod** (recommended), go_router, dio, freezed | Kept Flutter per brief — **no React** |
 
 ### 2.2 Monorepo layout
 
 ```
-libranet/
+jotheca/
 ├── backend/                    # Spring Boot — modular monolith (package-by-feature)
-│   └── src/main/java/com/libranet/
+│   └── src/main/java/com/jotheca/
 │       ├── platform/           # SUPER_ADMIN plane: tenants, plans, billing, health
 │       ├── identity/           # users, auth, sessions, JWT, refresh rotation
 │       ├── tenancy/            # TenantContext, filters, guard services
@@ -175,7 +175,7 @@ Convention: every tenant-owned row has `tenant_id`, `created_at/by`, `updated_at
 ### 4.6 SaaS / billing (platform plane)
 - **subscription_plans** — STARTER / PROFESSIONAL / ENTERPRISE + **plan_limits JSON** (storage GB, members, books, staff, AI calls…). *Code reads limits from here — zero hard-coded numbers.*
 - **library_subscriptions** — current plan, period, status, renewal
-- **invoices / payments** — Paystack references, platform-side (Library→LibraNet)
+- **invoices / payments** — Paystack references, platform-side (Library→J’otheca)
 - **storage_usage / quota_events** — current usage, warnings (80%/100%), add-on purchases
 - **patron_payments** — later: Library→Patron charges (membership fees, fines, book sales) under library keys
 
@@ -247,7 +247,7 @@ Conventions: `/api/v1/…` · DTOs everywhere · Bean Validation · uniform erro
 
 ## 8. Flutter Frontend Architecture
 
-Feature-first, Riverpod state, `go_router` for deep links (`libranet.app/join/{slug}`, `/book/{slug}` — invitation & publishing URLs work on web cleanly), `dio` with auth/tenant interceptors, `freezed` models generated from the OpenAPI spec to kill drift.
+Feature-first, Riverpod state, `go_router` for deep links (`jotheca.app/join/{slug}`, `/book/{slug}` — invitation & publishing URLs work on web cleanly), `dio` with auth/tenant interceptors, `freezed` models generated from the OpenAPI spec to kill drift.
 
 Screen groups by journey: **auth → empty-state ("You haven't joined a library yet") → discovery → join/invitation → home (per active library) → catalog/search → book detail → loans/reservations/fines → membership card (QR) → profile**; staff mode adds **desk (issue/return via scan), members, inventory**; admin adds **dashboard, policies, branding, staff**; a separate **platform console** for SUPER_ADMIN.
 

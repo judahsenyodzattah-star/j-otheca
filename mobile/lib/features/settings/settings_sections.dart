@@ -67,7 +67,7 @@ class _AccountSectionState extends ConsumerState<AccountSection> {
     if (user == null) return const SizedBox.shrink();
     return _SectionCard(
       title: 'Account',
-      subtitle: 'Your LibraNet identity — one account, every library.',
+      subtitle: 'Your J’otheca identity — one account, every library.',
       children: [
         ListTile(
           leading: const CircleAvatar(child: Icon(Icons.person_outline)),
@@ -376,7 +376,7 @@ class AppearanceSection extends ConsumerWidget {
     final mode = ref.watch(themeModeProvider);
     return _SectionCard(
       title: 'Appearance',
-      subtitle: 'LibraNet light + dark, from one brand seed.',
+      subtitle: 'J’otheca light + dark, from one brand seed.',
       children: [
         SegmentedButton<ThemeMode>(
           segments: const [

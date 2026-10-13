@@ -94,7 +94,7 @@ class AuthorPublicPage extends ConsumerWidget {
         ),
       ],
       const SizedBox(height: 16),
-      Text('Books on LibraNet', style: t.titleMedium),
+      Text('Books on J’otheca', style: t.titleMedium),
       const SizedBox(height: 6),
       if (books.isEmpty)
         const Text('No published books linked yet.')

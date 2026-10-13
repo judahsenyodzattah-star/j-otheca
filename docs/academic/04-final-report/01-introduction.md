@@ -23,11 +23,11 @@ privacy discipline as everything else, while being affordable: metered against a
 Recapped from the approved proposal: no open platform combines (a) genuine, auditable
 multi-tenant operation, (b) the complete physical-first circulation loop, (c) data-driven
 subscription plans with billing on African payment rails, and (d) tenant-safe, plan-metered
-AI discovery. LibraNet exists to close that conjunction.
+AI discovery. J’otheca exists to close that conjunction.
 
 ## 1.3 Aim and objectives
 
-**Aim.** To design, implement and rigorously verify LibraNet — a multi-tenant SaaS library
+**Aim.** To design, implement and rigorously verify J’otheca — a multi-tenant SaaS library
 platform whose tenant isolation is enforced at every architectural layer and proven by
 automated cross-tenant tests, with data-driven plan limits and tenant-pinned AI discovery.
 
@@ -66,7 +66,7 @@ in Chapters 5–6.
 
 ## 1.7 Chapter guide
 
-Chapter 2 reviews the literature and fixes LibraNet's position. Chapter 3 derives
+Chapter 2 reviews the literature and fixes J’otheca's position. Chapter 3 derives
 requirements. Chapter 4 presents the architecture and the nine isolation layers. Chapter 5
 describes implementation phase by phase. Chapter 6 is the testing story. Chapter 7 evaluates
 against the objectives and research questions with measured numbers. Chapter 8 concludes and

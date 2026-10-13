@@ -3,7 +3,7 @@
 14 slides, ~12 minutes + demo. Build in PowerPoint/Google Slides; keep one idea per slide,
 big numbers, few bullets. [Speaker notes] under each slide are what you *say*.
 
-**1. Title.** LibraNet — A Secure Multi-Tenant SaaS Platform for Library Management with
+**1. Title.** J’otheca — A Secure Multi-Tenant SaaS Platform for Library Management with
 AI-Assisted Discovery. Senyo-Dzattah Judah Agbemavor · PUIT/23110016 · BSc Information Technology · Supervisor
 [SUPERVISOR NAME]. *[30 s: one-sentence hook — "many libraries, one platform, and the
 engineering to prove they can never see each other".]*

@@ -346,7 +346,7 @@ class _IssueDetailPageState extends ConsumerState<IssueDetailPage> {
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(m.authorName ?? (m.system ? 'LibraNet assistant' : 'Member'),
+            Text(m.authorName ?? (m.system ? 'J’otheca assistant' : 'Member'),
                 style: Theme.of(context).textTheme.labelSmall),
             const SizedBox(height: 4),
             Text(m.body),
