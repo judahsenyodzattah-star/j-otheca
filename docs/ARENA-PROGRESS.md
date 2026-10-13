@@ -377,8 +377,9 @@ readiness. **Do not begin a new feature phase until the build is proven.**
 
 ## 10. How this work is preserved
 
-- Local branch `arena/a775b9a4-j-otheca` at `750913b`, one commit ahead of
-  `main`.
+- Local branch `arena/a775b9a4-j-otheca`, merge commit `2299776`, whose parents
+  are `3056940` (this checkpoint) and `50f8426` (an earlier session's rebrand
+  push). `main` is untouched at `7b2dd73`.
 - Pushed to `origin/arena/a775b9a4-j-otheca` on
   `https://github.com/judahsenyodzattah-star/j-otheca.git`.
 - To retrieve on Windows:
@@ -387,11 +388,50 @@ readiness. **Do not begin a new feature phase until the build is proven.**
 git clone https://github.com/judahsenyodzattah-star/j-otheca.git
 cd j-otheca
 git checkout arena/a775b9a4-j-otheca
-git log -1 --stat        # 750913b — 377 files changed, +6838 / -1819
+git log --oneline -4
+#   2299776 Merge origin/arena/a775b9a4-j-otheca ...
+#   3056940 docs: add Arena continuation record (ARENA-PROGRESS.md)
+#   750913b Checkpoint: J'otheca rebrand + Phase A RLS tenant-isolation hardening
+#   50f8426 J'otheca session batch: rebrand, security fixes, ...
 ```
 
+The snapshot commit is `750913b` — 377 files changed, +6838 / −1819.
+
 - To export a patch without cloning:
-  `git fetch origin arena/a775b9a4-j-otheca && git format-patch main..origin/arena/a775b9a4-j-otheca -o ./checkpoint`
+  `git fetch origin arena/a775b9a4-j-otheca && git format-patch 7b2dd73..origin/arena/a775b9a4-j-otheca -o ./checkpoint`
+
+### 10.1 Divergent remote, and why a merge was used
+
+A plain push of `750913b` was rejected (`! [rejected] … fetch first`) because
+an earlier session had already pushed commit `50f8426` to the same branch name.
+The two tips are mutually non-ancestral, so the branch had to be combined.
+
+Before merging it was verified that this branch is a **strict content superset**
+of `50f8426`:
+
+- `comm -23` over the two trees shows `50f8426` contains **zero files absent**
+  from this branch.
+- Of the 26 files that differ, 15 are additions and 11 are modifications in
+  which **every removed line is a deliberate replacement, not a loss**:
+  - `TenantAwareDataSource.java` — `Statement` + interpolated
+    `SET LOCAL app.tenant_id = '…'` → `PreparedStatement` + parameterized
+    `set_config('app.tenant_id', ?, true)`.
+  - `RateLimitFilter.java` — blind `X-Forwarded-For` trust →
+    `APP_RATE_LIMIT_TRUSTED_PROXIES` allow-list.
+  - `docker-compose.yml` — direct `${POSTGRES_PASSWORD:?…}` →
+    `${APP_RUNTIME_DB_PASSWORD:-${POSTGRES_PASSWORD:?…}}`; the fail-closed
+    guard is preserved, merely nested one level deeper.
+  - `InMemoryRateLimiter.java` — 28-line version → 52-line version with
+    idle-key sweeping (memory-exhaustion DoS protection).
+  - `OnboardingService.java` / `PlatformController.java` — constructor
+    signatures gained an audit parameter.
+
+The merge was resolved toward this branch's content, and the merged tree was
+then compared against the pre-merge tree: **both are
+`d7e1683e81944413b66131430508dac1924fe0e5`**, i.e. byte-identical. The merge
+therefore changed nothing in content — it only re-parented history so that the
+earlier session's commit is retained rather than discarded.
 
 `main` was **not** modified, force-pushed, reset or switched. No branch other
-than `arena/a775b9a4-j-otheca` was created or pushed.
+than `arena/a775b9a4-j-otheca` was created or pushed, and no destructive git
+operation was run against the worktree.
