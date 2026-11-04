@@ -24,6 +24,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Qualifier;
 
 @Configuration
 @EnableWebSecurity
@@ -31,13 +32,12 @@ import org.springframework.beans.factory.annotation.Value;
 public class SecurityConfig {
 
     private static final ObjectMapper JSON = JsonMapper.builder().findAndAddModules().build();
-
-    @Bean
-    SecurityFilterChain api(HttpSecurity http,
-                            JwtAuthFilter jwtAuthFilter,
-                            RateLimitFilter rateLimitFilter,
-                            TenantResolutionFilter tenantResolutionFilter,
-                            CorsConfigurationSource corsConfigurationSource) throws Exception {
+@Bean
+SecurityFilterChain api(HttpSecurity http,
+                        JwtAuthFilter jwtAuthFilter,
+                        RateLimitFilter rateLimitFilter,
+                        TenantResolutionFilter tenantResolutionFilter,
+                        @Qualifier("corsSource") CorsConfigurationSource corsConfigurationSource) throws Exception {
         http
             // Stateless JWT API: no server-side session exists for CSRF to attack (spec §36 —
             // CSRF protection returns with any future cookie-based transport).

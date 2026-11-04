@@ -144,7 +144,7 @@ class SecurityHardeningTest {
                 .andExpect(jsonPath("$.otpauthUri").isString())
                 .andReturn());
         String secret = enroll.path("secret").asText();
-        assertThat(enroll.path("otpauthUri").asText()).startsWith("otpauth://totp/J’otheca:");
+        assertThat(enroll.path("otpauthUri").asText()).startsWith("otpauth://totp/J%E2%80%99otheca:");
         // not enabled until a code proves possession
         mvc.perform(authed(get("/api/v1/me/security/mfa"), token))
                 .andExpect(jsonPath("$.mfaEnabled").value(false));

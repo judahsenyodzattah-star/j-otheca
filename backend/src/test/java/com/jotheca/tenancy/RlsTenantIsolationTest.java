@@ -13,6 +13,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
@@ -24,13 +25,13 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  * runtime role {@code jotheca_app} (NOSUPERUSER, NOBYPASSRLS, non-owner). It proves the policy actually
  * confines a non-owner role — which the previous owner/superuser connection silently bypassed.
  *
- * <p>Requires Docker (Testcontainers). Runs in CI; cannot run in a Docker-less sandbox.
+ * <p>Runs with Docker (Testcontainers) and is skipped when Docker is unavailable.
  *
  * <p>Covers (per remediation acceptance): cross-tenant read denial, cross-tenant WRITE + unauthorized
  * reassignment denial (WITH CHECK), missing tenant context fail-closed, connection-pool leakage
  * (SET LOCAL must not survive a transaction boundary), and the audited read-only platform role.
  */
-@Testcontainers
+@Testcontainers(disabledWithoutDocker = true)
 class RlsTenantIsolationTest {
 
     // Ephemeral, throwaway credentials for the disposable container only — never real secrets.

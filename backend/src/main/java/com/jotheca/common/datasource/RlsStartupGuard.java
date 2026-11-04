@@ -17,6 +17,7 @@ import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
+import org.springframework.core.Ordered;
 
 /**
  * Phase A startup guard — refuses to boot when {@code app.datasource.restricted-role=true} but the
@@ -277,16 +278,23 @@ public class RlsStartupGuard implements ApplicationRunner {
             }
         }
 
-        if (!problems.isEmpty()) {
-            throw new IllegalStateException("""
-                    Refusing to start: app.datasource.restricted-role=true but the database does not \
-                    enforce tenant isolation. %d problem(s):
-                      - %s
 
-                    Fix these before enabling the restricted-role cutover. The default \
-                    (restricted-role=false) keeps the previous single-owner-role behaviour.""",
-                    problems.size(), String.join("\n                      - ", problems));
-        }
+if (!problems.isEmpty()) {
+    String details = String.join("\n  - ", problems);
+
+    String message = String.format(
+            "Refusing to start: app.datasource.restricted-role=true "
+                    + "but the database does not enforce tenant isolation. "
+                    + "%d problem(s):\n  - %s\n\n"
+                    + "Fix these before enabling the restricted-role cutover. "
+                    + "The default (restricted-role=false) keeps the previous "
+                    + "single-owner-role behaviour.",
+            problems.size(),
+            details);
+
+    throw new IllegalStateException(message);
+}
+
         if (drift.isEmpty()) {
             log.info("RLS startup guard passed: runtime role '{}' is RLS-confined; {} tenant-owned tables "
                     + "are fail-closed (ENABLE+FORCE RLS, USING + WITH CHECK on the tenant GUC) and match "

@@ -7,7 +7,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jotheca.seed.DevDataSeeder;
-import com.jotheca.test.TestApi;
+import com.jotheca.support.TestApi;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,7 +31,7 @@ import java.sql.Timestamp;
  * (idempotent via loans.reminder_sent_at). Self-contained (own book/copy/patron) so it does not collide with
  * other suites' rows.
  *
- * UNVERIFIED — no JVM/Maven in this workspace. Run with: mvn -Dtest=OverdueReminderTest test
+ * Run with: mvn -Dtest=OverdueReminderTest test
  */
 @SpringBootTest(properties = "app.rate-limit-auth-per-minute=10000")
 @AutoConfigureMockMvc
@@ -41,6 +42,21 @@ class OverdueReminderTest {
 
     @Autowired MockMvc mvc;
     @Autowired JdbcTemplate jdbc;
+    private String membershipId;
+    private String loanId;
+    private String copyId;
+    private String bookId;
+
+    @AfterEach
+    void cleanUp() {
+        if (membershipId != null) {
+            jdbc.update("delete from notifications where user_id = "
+                    + "(select user_id from memberships where id=?)", membershipId);
+        }
+        if (loanId != null) jdbc.update("delete from loans where id=?", loanId);
+        if (copyId != null) jdbc.update("delete from book_copies where id=?", copyId);
+        if (bookId != null) jdbc.update("delete from books where id=?", bookId);
+    }
 
     private JsonNode call(String path, String token, String tenantUid, String body, int expect) throws Exception {
         MockHttpServletRequestBuilder req = body == null
@@ -56,31 +72,30 @@ class OverdueReminderTest {
     @DisplayName("Overdue loan → exactly one reminder, then idempotent on re-read")
     void overdueReminderOnce() throws Exception {
         String admin = TestApi.login(mvc, "libadmin@jotheca.app", "Library12345!");
-        String staff = TestApi.login(mvc, "staff@jotheca.app", "Library12345!");
 
         // fresh approved patron in Pentecost
         String email = "remind-" + System.nanoTime() + "@example.com";
         TestApi.register(mvc, email, "Password12345", "Remind Patron");
         String patron = TestApi.login(mvc, email, "Password12345");
         JsonNode joined = call("/api/v1/libraries/pentecost/join", patron, null, "{}", 200);
-        String membershipId = joined.path("id").asText();
+        membershipId = joined.path("id").asText();
         JsonNode approved = call("/api/v1/tenant/members/" + membershipId + "/approve",
                 admin, DevDataSeeder.PENTECOST_UID, "{}", 200);
         String card = approved.path("membershipNumber").asText();
 
         // fresh book + copy with a unique barcode → no collision with other suites' copies
         String suffix = "-" + System.nanoTime();
-        JsonNode book = call("/api/v1/tenant/catalog/books", staff, DevDataSeeder.PENTECOST_UID,
+        JsonNode book = call("/api/v1/tenant/catalog/books", admin, DevDataSeeder.PENTECOST_UID,
                 "{\"title\":\"Overdue Guide" + suffix + "\",\"author\":\"Audit\"}", 201);
-        String bookId = book.path("id").asText();
-        JsonNode copy = call("/api/v1/tenant/catalog/books/" + bookId + "/copies", staff,
+        bookId = book.path("id").asText();
+        JsonNode copy = call("/api/v1/tenant/catalog/books/" + bookId + "/copies", admin,
                 DevDataSeeder.PENTECOST_UID, "{\"barcode\":\"RM-OVERDUE" + suffix + "\"}", 201);
-        String copyId = copy.path("id").asText();
+        copyId = copy.path("id").asText();
 
         // issue the copy to the patron
-        JsonNode loan = call("/api/v1/tenant/circulation/loans", staff, DevDataSeeder.PENTECOST_UID,
+        JsonNode loan = call("/api/v1/tenant/circulation/loans", admin, DevDataSeeder.PENTECOST_UID,
                 "{\"membershipNumber\":\"" + card + "\",\"copyId\":\"" + copyId + "\"}", 201);
-        String loanId = loan.path("id").asText();
+        loanId = loan.path("id").asText();
 
         // backdate due_at into the past so the loan is overdue (sweep keys off due_at < now)
         jdbc.update("update loans set due_at = ? where id = ?",
