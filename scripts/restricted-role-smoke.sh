@@ -224,6 +224,7 @@ pass "Postgres ready on 127.0.0.1:${PG_PORT}/${PG_DB} (owner=${PG_OWNER})"
 # ------------------------------------------------------------------------- 2. provision the roles
 section "2. Provision least-privilege roles (infra/db/provision-roles.sh)"
 if JOTHECA_MIGRATE_PW="$MIGRATE_PW" JOTHECA_APP_PW="$APP_PW" JOTHECA_READALL_PW="$READALL_PW" \
+   PGPASSWORD="$PG_OWNER_PW" \
    PGHOST=127.0.0.1 PGPORT="$PG_PORT" PGUSER="$PG_OWNER" PGDATABASE="$PG_DB" \
    bash "$ROOT/infra/db/provision-roles.sh" >"$WORKDIR/provision.log" 2>&1; then
   pass "provision-roles.sh completed"

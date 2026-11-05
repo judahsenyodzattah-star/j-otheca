@@ -110,6 +110,28 @@ class DiscoveryPostgresSchemaTest {
     }
 
     @Test
+    void flywayReachesV28AndTextEmbeddingContractRemainsIntact() throws Exception {
+        try (Connection connection = owner()) {
+            assertThat(singleInt(connection, """
+                    SELECT COUNT(*) FROM flyway_schema_history
+                    WHERE version = '28' AND success
+                    """)).isEqualTo(1);
+            assertThat(singleInt(connection, """
+                    SELECT COUNT(*) FROM information_schema.columns
+                    WHERE table_schema = 'public' AND table_name = 'book_embeddings'
+                      AND column_name = 'embedding' AND data_type = 'text'
+                    """)).isEqualTo(1);
+            assertThat(singleInt(connection, """
+                    SELECT COUNT(*) FROM pg_indexes
+                    WHERE schemaname = 'public' AND indexname = 'idx_book_embeddings_hnsw'
+                    """)).isEqualTo(0);
+            assertThat(singleInt(connection, """
+                    SELECT COUNT(*) FROM pg_extension WHERE extname = 'vector'
+                    """)).isEqualTo(1);
+        }
+    }
+
+    @Test
     void v28CatalogMetadataIsPresent() throws Exception {
         try (Connection connection = owner()) {
             assertThat(singleInt(connection, "SELECT COUNT(*) FROM pg_namespace WHERE nspname = 'discovery'"))
