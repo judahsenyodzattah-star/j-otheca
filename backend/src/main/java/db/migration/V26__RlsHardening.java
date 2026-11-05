@@ -3,6 +3,7 @@ package db.migration;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Savepoint;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -173,30 +174,33 @@ public class V26__RlsHardening extends BaseJavaMigration {
      * and FAILS the migration rather than being silently ignored.
      */
     private void grantRequired(Statement st, String role, String grant) throws Exception {
-        try {
-            st.execute(grant);
-        } catch (SQLException e) {
-            if (isRoleAbsent(e)) {
-                log.warn("Role {} not provisioned yet; skipping grant: {} (run infra/db/provision-roles.sh).",
-                        role, grant);
-            } else {
-                throw new SQLException("Required security grant failed (SQLState " + e.getSQLState() + "): "
-                        + grant + " - role privileges incomplete; refusing to continue (req: fail closed).", e);
-            }
-        }
+        executeRoleStatement(st, role, grant, "grant");
     }
 
     /** Same contract as {@link #grantRequired}, for revocations. */
     private void revokeRequired(Statement st, String role, String revoke) throws Exception {
+        executeRoleStatement(st, role, revoke, "revoke");
+    }
+
+    /**
+     * A missing optional runtime role must not leave Flyway's transaction aborted. The savepoint
+     * rollback is deliberately limited to SQLState 42704; every other database error remains fatal.
+     */
+    private void executeRoleStatement(Statement st, String role, String sql, String operation) throws Exception {
+        var connection = st.getConnection();
+        Savepoint savepoint = connection.setSavepoint();
         try {
-            st.execute(revoke);
+            st.execute(sql);
+            connection.releaseSavepoint(savepoint);
         } catch (SQLException e) {
             if (isRoleAbsent(e)) {
-                log.warn("Role {} not provisioned yet; skipping revoke: {} (run infra/db/provision-roles.sh).",
-                        role, revoke);
+                connection.rollback(savepoint);
+                connection.releaseSavepoint(savepoint);
+                log.warn("Role {} not provisioned yet; skipping {}: {} (run infra/db/provision-roles.sh).",
+                        role, operation, sql);
             } else {
-                throw new SQLException("Required security revoke failed (SQLState " + e.getSQLState() + "): "
-                        + revoke + " - role privileges incomplete; refusing to continue (req: fail closed).", e);
+                throw new SQLException("Required security " + operation + " failed (SQLState " + e.getSQLState()
+                        + "): " + sql + " - role privileges incomplete; refusing to continue (req: fail closed).", e);
             }
         }
     }

@@ -19,16 +19,23 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @Testcontainers(disabledWithoutDocker = true)
 class DiscoveryPostgresSchemaTest {
 
+    private static final String MIGRATE_PASSWORD = "discovery-migrate-password";
+    private static final String APP_PASSWORD = "discovery-app-password";
+    private static final String READALL_PASSWORD = "discovery-readall-password";
+
     @Container
     static PostgreSQLContainer<?> pg = new PostgreSQLContainer<>("pgvector/pgvector:pg16");
 
+    @Container
+    static PostgreSQLContainer<?> pgWithoutRuntimeRoles =
+            new PostgreSQLContainer<>("pgvector/pgvector:pg16");
+
     @BeforeAll
     static void migrateAndSeed() throws Exception {
-        Flyway.configure()
-                .dataSource(pg.getJdbcUrl(), pg.getUsername(), pg.getPassword())
-                .locations("classpath:db/migration")
-                .load()
-                .migrate();
+        provisionRuntimeRolesAndExtensions();
+        flyway(pg, "jotheca_migrate", MIGRATE_PASSWORD).migrate();
+        flyway(pgWithoutRuntimeRoles, pgWithoutRuntimeRoles.getUsername(),
+                pgWithoutRuntimeRoles.getPassword()).migrate();
 
         try (Connection connection = owner(); Statement statement = connection.createStatement()) {
             statement.execute("""
@@ -205,8 +212,91 @@ class DiscoveryPostgresSchemaTest {
         }
     }
 
+    @Test
+    void runtimeRolesRemainLeastPrivilegeAfterV26() throws Exception {
+        try (Connection connection = owner()) {
+            assertThat(singleInt(connection, """
+                    SELECT COUNT(*) FROM pg_roles
+                    WHERE rolname = 'jotheca_migrate' AND NOT rolsuper AND NOT rolbypassrls
+                    """)).isEqualTo(1);
+            assertThat(singleInt(connection, """
+                    SELECT COUNT(*) FROM pg_roles
+                    WHERE rolname = 'jotheca_app' AND NOT rolsuper AND NOT rolbypassrls
+                    """)).isEqualTo(1);
+            assertThat(singleInt(connection, """
+                    SELECT COUNT(*) FROM pg_roles
+                    WHERE rolname = 'jotheca_readall' AND NOT rolsuper AND rolbypassrls
+                    """)).isEqualTo(1);
+            assertThat(singleInt(connection, """
+                    SELECT COUNT(*)
+                    WHERE has_table_privilege('jotheca_app', 'books', 'SELECT')
+                      AND NOT has_table_privilege('jotheca_app', 'flyway_schema_history', 'INSERT')
+                      AND has_table_privilege('jotheca_readall', 'books', 'SELECT')
+                      AND NOT has_table_privilege('jotheca_readall', 'books', 'INSERT')
+                    """)).isEqualTo(1);
+        }
+    }
+
+    @Test
+    void missingRuntimeRolesDoNotAbortFlywayTransaction() throws Exception {
+        try (Connection connection = absentOwner()) {
+            assertThat(singleInt(connection, """
+                    SELECT COUNT(*) FROM flyway_schema_history
+                    WHERE version = '26' AND success
+                    """)).isEqualTo(1);
+            assertThat(singleInt(connection, """
+                    SELECT COUNT(*) FROM flyway_schema_history
+                    WHERE version = '28' AND success
+                    """)).isEqualTo(1);
+            assertThat(singleInt(connection, """
+                    SELECT COUNT(*) FROM pg_roles
+                    WHERE rolname IN ('jotheca_migrate', 'jotheca_app', 'jotheca_readall')
+                    """)).isEqualTo(0);
+        }
+    }
+
+    private static void provisionRuntimeRolesAndExtensions() throws SQLException {
+        try (Connection connection = owner(); Statement statement = connection.createStatement()) {
+            statement.execute("CREATE EXTENSION IF NOT EXISTS vector");
+            statement.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm");
+            statement.execute("""
+                    DO $$ BEGIN
+                      IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'jotheca_migrate') THEN
+                        CREATE ROLE jotheca_migrate LOGIN;
+                      END IF;
+                      IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'jotheca_app') THEN
+                        CREATE ROLE jotheca_app LOGIN;
+                      END IF;
+                      IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'jotheca_readall') THEN
+                        CREATE ROLE jotheca_readall LOGIN;
+                      END IF;
+                    END $$
+                    """);
+            statement.execute("ALTER ROLE jotheca_migrate WITH LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '"
+                    + MIGRATE_PASSWORD + "'");
+            statement.execute("ALTER ROLE jotheca_app WITH LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '"
+                    + APP_PASSWORD + "'");
+            statement.execute("ALTER ROLE jotheca_readall WITH LOGIN NOSUPERUSER BYPASSRLS PASSWORD '"
+                    + READALL_PASSWORD + "'");
+            statement.execute("ALTER DATABASE \"" + pg.getDatabaseName() + "\" OWNER TO jotheca_migrate");
+            statement.execute("ALTER SCHEMA public OWNER TO jotheca_migrate");
+        }
+    }
+
+    private static Flyway flyway(PostgreSQLContainer<?> container, String username, String password) {
+        return Flyway.configure()
+                .dataSource(container.getJdbcUrl(), username, password)
+                .locations("classpath:db/migration")
+                .load();
+    }
+
     private static Connection owner() throws SQLException {
         return DriverManager.getConnection(pg.getJdbcUrl(), pg.getUsername(), pg.getPassword());
+    }
+
+    private static Connection absentOwner() throws SQLException {
+        return DriverManager.getConnection(pgWithoutRuntimeRoles.getJdbcUrl(),
+                pgWithoutRuntimeRoles.getUsername(), pgWithoutRuntimeRoles.getPassword());
     }
 
     private static int singleInt(Connection connection, String sql) throws SQLException {

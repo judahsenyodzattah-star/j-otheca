@@ -25,6 +25,7 @@ set -euo pipefail
 : "${JOTHECA_READALL_PW:?set JOTHECA_READALL_PW (env / secret manager)}"
 : "${PGUSER:=jotheca}"
 : "${PGDATABASE:=jotheca}"
+: "${JOTHECA_ASSIGN_OWNERSHIP:=false}"
 
 psql -v ON_ERROR_STOP=1 \
      -v migrate_pw="$JOTHECA_MIGRATE_PW" \
@@ -57,5 +58,13 @@ psql -v ON_ERROR_STOP=1 \
                    current_database());
   END $$;
 EOSQL
+
+if [ "$JOTHECA_ASSIGN_OWNERSHIP" = "true" ]; then
+  # The bootstrap connection must remain administrative while ownership is assigned. This is
+  # intended for a fresh disposable database before Flyway connects as jotheca_migrate.
+  psql -v ON_ERROR_STOP=1 -v db_name="$PGDATABASE" \
+       -c 'ALTER DATABASE :"db_name" OWNER TO jotheca_migrate' \
+       -c 'ALTER SCHEMA public OWNER TO jotheca_migrate'
+fi
 
 echo "provision-roles: jotheca_migrate / jotheca_app / jotheca_readall ready (passwords from env)."

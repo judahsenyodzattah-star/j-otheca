@@ -51,7 +51,8 @@ PG_CONTAINER="${SMOKE_PG_CONTAINER:-jotheca-rls-smoke}"
 # postgres, so the old default would have silently attached the smoke test to the dev database.
 PG_PORT="${SMOKE_PG_PORT:-5543}"
 PG_DB="${SMOKE_PG_DB:-jotheca}"
-PG_OWNER="${SMOKE_PG_OWNER:-jotheca_migrate}"   # fresh-DB path: the migration role owns the schema
+PG_BOOTSTRAP="${SMOKE_PG_BOOTSTRAP:-postgres}"   # disposable-DB bootstrap superuser
+PG_OWNER="${SMOKE_PG_OWNER:-jotheca_migrate}"   # migration/database owner role
 # Outside the compose stack's published range (3001/5532/6479/8100/8101/8180/9100-9103) so the two
 # can be run side by side; also probed for collisions below.
 APP_PORT="${SMOKE_APP_PORT:-18080}"
@@ -200,6 +201,7 @@ for _p in "$PG_PORT" "$APP_PORT"; do
   fi
 done
 
+PG_BOOTSTRAP_PW="$(rand_hex 18)"
 PG_OWNER_PW="$(rand_hex 18)"
 MIGRATE_PW="$PG_OWNER_PW"
 APP_PW="$(rand_hex 18)"
@@ -211,21 +213,28 @@ JWT_SECRET="smoke-$(rand_hex 24)"
 section "1. Real PostgreSQL ($PG_IMAGE) — fresh-DB path, migration role owns the schema"
 docker rm -f "$PG_CONTAINER" >/dev/null 2>&1 || true
 docker run -d --rm --name "$PG_CONTAINER" \
-  -e POSTGRES_USER="$PG_OWNER" -e POSTGRES_PASSWORD="$PG_OWNER_PW" -e POSTGRES_DB="$PG_DB" \
+  -e POSTGRES_USER="$PG_BOOTSTRAP" -e POSTGRES_PASSWORD="$PG_BOOTSTRAP_PW" -e POSTGRES_DB="$PG_DB" \
   -p "127.0.0.1:${PG_PORT}:5432" "$PG_IMAGE" >/dev/null
 ready=""
 for _ in $(seq 1 60); do
-  if docker exec "$PG_CONTAINER" pg_isready -U "$PG_OWNER" -d "$PG_DB" >/dev/null 2>&1; then ready=1; break; fi
+  if docker exec "$PG_CONTAINER" pg_isready -U "$PG_BOOTSTRAP" -d "$PG_DB" >/dev/null 2>&1; then ready=1; break; fi
   sleep 2
 done
 if [ -z "$ready" ]; then c_red "Postgres did not become ready"; docker logs "$PG_CONTAINER" | tail -30; exit 1; fi
-pass "Postgres ready on 127.0.0.1:${PG_PORT}/${PG_DB} (owner=${PG_OWNER})"
+pass "Postgres ready on 127.0.0.1:${PG_PORT}/${PG_DB} (bootstrap=${PG_BOOTSTRAP})"
+
+section "1a. Bootstrap PostgreSQL extensions"
+docker exec -e PGPASSWORD="$PG_BOOTSTRAP_PW" "$PG_CONTAINER" \
+  psql -U "$PG_BOOTSTRAP" -d "$PG_DB" -v ON_ERROR_STOP=1 \
+  -c "CREATE EXTENSION IF NOT EXISTS vector" \
+  -c "CREATE EXTENSION IF NOT EXISTS pg_trgm" >/dev/null
+pass "vector and pg_trgm installed by bootstrap"
 
 # ------------------------------------------------------------------------- 2. provision the roles
 section "2. Provision least-privilege roles (infra/db/provision-roles.sh)"
 if JOTHECA_MIGRATE_PW="$MIGRATE_PW" JOTHECA_APP_PW="$APP_PW" JOTHECA_READALL_PW="$READALL_PW" \
-   PGPASSWORD="$PG_OWNER_PW" \
-   PGHOST=127.0.0.1 PGPORT="$PG_PORT" PGUSER="$PG_OWNER" PGDATABASE="$PG_DB" \
+   JOTHECA_ASSIGN_OWNERSHIP=true PGPASSWORD="$PG_BOOTSTRAP_PW" \
+   PGHOST=127.0.0.1 PGPORT="$PG_PORT" PGUSER="$PG_BOOTSTRAP" PGDATABASE="$PG_DB" \
    bash "$ROOT/infra/db/provision-roles.sh" >"$WORKDIR/provision.log" 2>&1; then
   pass "provision-roles.sh completed"
 else

@@ -58,7 +58,7 @@ jobs:
       - run: flutter test
       - run: flutter build web --release   # fails the merge on any compile error, not just analysis
 
-  # Release-checklist prerequisite: every PG-only behavior (RLS policies, pgvector HNSW,
+  # Release-checklist prerequisite: every PG-only behavior (RLS policies, pgvector extension,
   # pg_trgm trigram indexes) must be proven against REAL Postgres on every change.
   staging-migration-smoke:
     runs-on: ubuntu-latest
@@ -66,12 +66,12 @@ jobs:
       postgres:
         image: pgvector/pgvector:pg16
         env:
-          POSTGRES_USER: jotheca
+          POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: jotheca
         ports: ["5432:5432"]
         options: >-
-          --health-cmd "pg_isready -U jotheca"
+          --health-cmd "pg_isready -U postgres"
           --health-interval 5s --health-timeout 3s --health-retries 30
       redis:
         image: redis:7-alpine
@@ -89,6 +89,21 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: maven
+      - name: Bootstrap PostgreSQL roles and extensions
+        env:
+          PGPASSWORD: postgres
+          PGHOST: localhost
+          PGPORT: "5432"
+          PGUSER: postgres
+          PGDATABASE: jotheca
+          JOTHECA_MIGRATE_PW: ci-migrate-password
+          JOTHECA_APP_PW: ci-app-password
+          JOTHECA_READALL_PW: ci-readall-password
+          JOTHECA_ASSIGN_OWNERSHIP: "true"
+        run: |
+          PG="docker exec -e PGPASSWORD=postgres $(docker ps -qf ancestor=pgvector/pgvector:pg16) psql -U postgres -d jotheca -v ON_ERROR_STOP=1"
+          $PG -c "CREATE EXTENSION IF NOT EXISTS vector" -c "CREATE EXTENSION IF NOT EXISTS pg_trgm"
+          bash infra/db/provision-roles.sh
       - name: Package
         working-directory: backend
         run: mvn -B -q -DskipTests package
@@ -97,8 +112,14 @@ jobs:
         env:
           SPRING_PROFILES_ACTIVE: staging
           SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/jotheca
-          SPRING_DATASOURCE_USERNAME: jotheca
-          SPRING_DATASOURCE_PASSWORD: postgres
+          SPRING_DATASOURCE_USERNAME: jotheca_app
+          SPRING_DATASOURCE_PASSWORD: ci-app-password
+          SPRING_FLYWAY_URL: jdbc:postgresql://localhost:5432/jotheca
+          SPRING_FLYWAY_USERNAME: jotheca_migrate
+          SPRING_FLYWAY_PASSWORD: ci-migrate-password
+          APP_RESTRICTED_ROLE: "true"
+          APP_PLATFORM_READ_DB_USER: jotheca_readall
+          APP_PLATFORM_READ_DB_PASSWORD: ci-readall-password
           APP_JWT_SECRET: ci-smoke-secret-ci-smoke-secret-ci-smoke-secret-ci01
           PUBLIC_BASE_URL: http://localhost:8080
           CORS_ORIGINS: http://localhost
@@ -119,17 +140,19 @@ jobs:
           curl -sf -X POST localhost:8080/api/v1/auth/register \
             -H 'Content-Type: application/json' \
             -d '{"email":"ci@jotheca.dev","password":"CiSmoke12345!","fullName":"CI Smoke"}'
-      - name: PG-only migrations actually landed (RLS + HNSW + trigram + RLS enabled)
+      - name: PG-only migrations actually landed (RLS + extensions + trigram + V28)
         run: |
-          PG="docker exec -e PGPASSWORD=postgres $(docker ps -qf ancestor=pgvector/pgvector:pg16) psql -U jotheca -d jotheca -At"
+          PG="docker exec -e PGPASSWORD=postgres $(docker ps -qf ancestor=pgvector/pgvector:pg16) psql -U postgres -d jotheca -At"
+          VECTOR=$($PG -c "SELECT COUNT(*) FROM pg_extension WHERE extname = 'vector'")
+          EMBEDDING_TEXT=$($PG -c "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='book_embeddings' AND column_name='embedding' AND data_type='text'")
           HNSW=$($PG -c "SELECT COUNT(*) FROM pg_indexes WHERE indexname = 'idx_book_embeddings_hnsw'")
           TRGM=$($PG -c "SELECT COUNT(*) FROM pg_indexes WHERE indexname LIKE '%_trgm'")
           RLS=$($PG -c "SELECT COUNT(*) FROM pg_policies WHERE policyname LIKE '%_tenant_isolation'")
-          RLS_ON=$($PG -c "SELECT COUNT(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relrowsecurity")
+          RLS_ON=$($PG -c "SELECT COUNT(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relrowsecurity AND c.relforcerowsecurity")
           V28=$($PG -c "SELECT COUNT(*) FROM flyway_schema_history WHERE version='28' AND success")
           DISCOVERY_TABLES=$($PG -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='discovery' AND table_name IN ('editions','holdings','holding_sources')")
-          echo "hnsw=$HNSW trgm=$TRGM policies=$RLS rlsEnabled=$RLS_ON v28=$V28 discoveryTables=$DISCOVERY_TABLES"
-          [ "$HNSW" = "1" ] && [ "$TRGM" = "4" ] && [ "$RLS" -ge 25 ] && [ "$RLS_ON" -ge 25 ] && [ "$V28" = "1" ] && [ "$DISCOVERY_TABLES" = "3" ]
+          echo "vector=$VECTOR embeddingText=$EMBEDDING_TEXT hnsw=$HNSW trgm=$TRGM policies=$RLS rlsForced=$RLS_ON v28=$V28 discoveryTables=$DISCOVERY_TABLES"
+          [ "$VECTOR" = "1" ] && [ "$EMBEDDING_TEXT" = "1" ] && [ "$HNSW" = "0" ] && [ "$TRGM" = "4" ] && [ "$RLS" -ge 25 ] && [ "$RLS_ON" -ge 25 ] && [ "$V28" = "1" ] && [ "$DISCOVERY_TABLES" = "3" ]
       - name: Teardown
         if: always()
         run: kill "$(cat /tmp/app.pid)" 2>/dev/null || true
