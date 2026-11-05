@@ -334,13 +334,8 @@ public class V26__RlsHardening extends BaseJavaMigration {
      */
     private List<String> verifyRolePrivileges(Statement st) throws Exception {
         List<String> problems = new ArrayList<>();
-        for (String role : new String[]{"jotheca_app", "jotheca_readall"}) {
-            if (!roleExists(st, role)) {
-                log.warn("Role {} is not provisioned; skipping its privilege verification "
-                        + "(run infra/db/provision-roles.sh). The application will refuse to start "
-                        + "under app.datasource.restricted-role=true until it exists.", role);
-                continue;
-            }
+        String role = "jotheca_readall";
+        if (roleExists(st, role)) {
             for (String table : CREDENTIAL_TABLES) {
                 if (hasPrivilege(st, role, table, "SELECT")) {
                     problems.add(role + " can still SELECT " + table + " (token hashes must be unreachable)");
@@ -357,6 +352,10 @@ public class V26__RlsHardening extends BaseJavaMigration {
                     problems.add(role + " can SELECT users." + col + " (credential material must be withheld)");
                 }
             }
+        } else {
+            log.warn("Role {} is not provisioned; skipping its privilege verification "
+                    + "(run infra/db/provision-roles.sh). The application will refuse to start "
+                    + "under app.datasource.restricted-role=true until it exists.", role);
         }
         if (roleExists(st, "jotheca_app")) {
             for (String priv : new String[]{"INSERT", "UPDATE", "DELETE", "TRUNCATE"}) {

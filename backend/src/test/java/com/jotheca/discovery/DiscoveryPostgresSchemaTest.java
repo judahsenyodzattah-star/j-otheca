@@ -238,6 +238,30 @@ class DiscoveryPostgresSchemaTest {
     }
 
     @Test
+    void runtimeConnectionsPreserveApplicationAccessAndHideCredentialsFromReadAll() throws Exception {
+        try (Connection app = asApp(); Connection readall = asReadall()) {
+            assertThat(singleInt(app, "SELECT COUNT(*) FROM auth_sessions")).isZero();
+            assertThat(singleInt(app, "SELECT COUNT(*) FROM verification_tokens")).isZero();
+            assertThat(singleInt(app, "SELECT COUNT(*) FROM users WHERE password_hash IS NOT NULL")).isZero();
+
+            assertThatThrownBy(() -> singleInt(readall, "SELECT COUNT(*) FROM auth_sessions"))
+                    .isInstanceOf(SQLException.class);
+            assertThatThrownBy(() -> singleInt(readall, "SELECT COUNT(*) FROM verification_tokens"))
+                    .isInstanceOf(SQLException.class);
+            assertThatThrownBy(() -> singleInt(readall,
+                    "SELECT COUNT(*) FROM users WHERE password_hash IS NOT NULL"))
+                    .isInstanceOf(SQLException.class);
+            assertThatThrownBy(() -> singleInt(readall,
+                    "SELECT COUNT(*) FROM users WHERE mfa_secret IS NOT NULL"))
+                    .isInstanceOf(SQLException.class);
+            assertThatThrownBy(() -> singleInt(readall,
+                    "SELECT COUNT(*) FROM users WHERE mfa_enabled"))
+                    .isInstanceOf(SQLException.class);
+            assertThat(singleInt(readall, "SELECT COUNT(id) FROM users")).isZero();
+        }
+    }
+
+    @Test
     void missingRuntimeRolesDoNotAbortFlywayTransaction() throws Exception {
         try (Connection connection = absentOwner()) {
             assertThat(singleInt(connection, """
@@ -297,6 +321,14 @@ class DiscoveryPostgresSchemaTest {
     private static Connection absentOwner() throws SQLException {
         return DriverManager.getConnection(pgWithoutRuntimeRoles.getJdbcUrl(),
                 pgWithoutRuntimeRoles.getUsername(), pgWithoutRuntimeRoles.getPassword());
+    }
+
+    private static Connection asApp() throws SQLException {
+        return DriverManager.getConnection(pg.getJdbcUrl(), "jotheca_app", APP_PASSWORD);
+    }
+
+    private static Connection asReadall() throws SQLException {
+        return DriverManager.getConnection(pg.getJdbcUrl(), "jotheca_readall", READALL_PASSWORD);
     }
 
     private static int singleInt(Connection connection, String sql) throws SQLException {
