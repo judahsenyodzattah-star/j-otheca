@@ -334,6 +334,14 @@ assert_eq "29 tenant-isolation policies installed" "29" \
   "$(psql_owner "SELECT count(*) FROM pg_policies WHERE policyname LIKE '%tenant_isolation'")"
 assert_eq "29 tenant tables with FORCE RLS enabled" "29" \
   "$(psql_owner "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relrowsecurity AND c.relforcerowsecurity")"
+assert_eq "jotheca_app has no discovery schema USAGE before explicit grant design" "f" \
+  "$(psql_owner "SELECT has_schema_privilege('jotheca_app', 'discovery', 'USAGE')")"
+assert_eq "jotheca_readall has no discovery schema USAGE before explicit grant design" "f" \
+  "$(psql_owner "SELECT has_schema_privilege('jotheca_readall', 'discovery', 'USAGE')")"
+LEAK="$(expect_sql_failure jotheca_app "$APP_PW" "SELECT count(*) FROM discovery.editions")"
+assert_eq "jotheca_app cannot read discovery before explicit grant design" "OK" "$LEAK"
+LEAK="$(expect_sql_failure jotheca_readall "$READALL_PW" "SELECT count(*) FROM discovery.editions")"
+assert_eq "jotheca_readall cannot read discovery before explicit grant design" "OK" "$LEAK"
 assert_eq "both least-privilege pools are actually in use" "2" \
   "$(psql_owner "SELECT count(DISTINCT usename) FROM pg_stat_activity WHERE usename IN ('jotheca_app','jotheca_readall')")"
 

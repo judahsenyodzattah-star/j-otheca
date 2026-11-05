@@ -36,6 +36,14 @@ public class Library extends BaseEntity {
     @Column(name = "join_policy", nullable = false, length = 30)
     private JoinPolicy joinPolicy = JoinPolicy.PUBLIC;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "catalog_visibility", nullable = false, length = 20)
+    private CatalogVisibility catalogVisibility = CatalogVisibility.MEMBERS_ONLY;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "holdings_visibility", nullable = false, length = 20)
+    private HoldingsVisibility holdingsVisibility = HoldingsVisibility.PRESENCE;
+
     @Column(nullable = false)
     private boolean visibility = true;
 
@@ -88,6 +96,14 @@ public class Library extends BaseEntity {
     public void setStatus(LibraryStatus status) { this.status = status; }
     public JoinPolicy getJoinPolicy() { return joinPolicy; }
     public void setJoinPolicy(JoinPolicy joinPolicy) { this.joinPolicy = joinPolicy; }
+    public CatalogVisibility getCatalogVisibility() { return catalogVisibility; }
+    public void setCatalogVisibility(CatalogVisibility catalogVisibility) {
+        this.catalogVisibility = catalogVisibility;
+    }
+    public HoldingsVisibility getHoldingsVisibility() { return holdingsVisibility; }
+    public void setHoldingsVisibility(HoldingsVisibility holdingsVisibility) {
+        this.holdingsVisibility = holdingsVisibility;
+    }
     public boolean isVisibility() { return visibility; }
     public void setVisibility(boolean visibility) { this.visibility = visibility; }
     public boolean isAllowAnonymousReviews() { return allowAnonymousReviews; }

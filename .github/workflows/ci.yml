@@ -126,8 +126,10 @@ jobs:
           TRGM=$($PG -c "SELECT COUNT(*) FROM pg_indexes WHERE indexname LIKE '%_trgm'")
           RLS=$($PG -c "SELECT COUNT(*) FROM pg_policies WHERE policyname LIKE '%_tenant_isolation'")
           RLS_ON=$($PG -c "SELECT COUNT(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relrowsecurity")
-          echo "hnsw=$HNSW trgm=$TRGM policies=$RLS rlsEnabled=$RLS_ON"
-          [ "$HNSW" = "1" ] && [ "$TRGM" = "4" ] && [ "$RLS" -ge 25 ] && [ "$RLS_ON" -ge 25 ]
+          V28=$($PG -c "SELECT COUNT(*) FROM flyway_schema_history WHERE version='28' AND success")
+          DISCOVERY_TABLES=$($PG -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='discovery' AND table_name IN ('editions','holdings','holding_sources')")
+          echo "hnsw=$HNSW trgm=$TRGM policies=$RLS rlsEnabled=$RLS_ON v28=$V28 discoveryTables=$DISCOVERY_TABLES"
+          [ "$HNSW" = "1" ] && [ "$TRGM" = "4" ] && [ "$RLS" -ge 25 ] && [ "$RLS_ON" -ge 25 ] && [ "$V28" = "1" ] && [ "$DISCOVERY_TABLES" = "3" ]
       - name: Teardown
         if: always()
         run: kill "$(cat /tmp/app.pid)" 2>/dev/null || true
