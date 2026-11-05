@@ -278,6 +278,9 @@ section "5. Boot the app: restricted-role=true, separate Flyway credentials"
 APP_LOG="$WORKDIR/app.log"
 # `env -u SPRING_PROFILES_ACTIVE` guarantees the dev profile (H2) can never be inherited from the
 # caller's environment — the whole point is to run against real Postgres with the real roles.
+# `app.datasource.restricted-role` and `app.datasource.platform-read.*` are bound only by
+# application-staging.yml. The explicit command-line arguments below keep the plane split active
+# even though this smoke test intentionally runs without the staging profile.
 env -u SPRING_PROFILES_ACTIVE \
 SPRING_DATASOURCE_URL="jdbc:postgresql://127.0.0.1:${PG_PORT}/${PG_DB}" \
 SPRING_DATASOURCE_USERNAME="jotheca_app" \
@@ -294,13 +297,6 @@ CORS_ORIGINS="http://127.0.0.1" \
 STORAGE_PROVIDER="memory" \
 RATE_LIMIT_BACKEND="memory" \
 SERVER_PORT="$APP_PORT" \
-# C2: app.datasource.restricted-role and app.datasource.platform-read.* are bound ONLY in
-# application-staging.yml (grep backend/src/main/resources to confirm). No staging profile is active
-# here, so the environment variables above would be inert: PlatformPlaneConfig is @ConditionalOnProperty
-# on that flag, would never activate, and the app would boot on Spring Boot's single default
-# datasource with NO plane split - while every assertion still passed. They are therefore passed as
-# EXPLICIT command-line arguments, which bind from the Environment regardless of the active profile.
-# The same values are still exported above so the intent is visible in one place.
 nohup java -jar "$JAR" \
   --app.datasource.restricted-role=true \
   --app.datasource.platform-read.username=jotheca_readall \

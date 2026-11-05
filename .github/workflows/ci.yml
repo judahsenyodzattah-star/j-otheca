@@ -110,7 +110,7 @@ jobs:
       - name: Boot the staging profile against real Postgres + Redis
         working-directory: backend
         env:
-          SPRING_PROFILES_ACTIVE: staging
+          SPRING_PROFILES_ACTIVE: staging,test
           SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/jotheca
           SPRING_DATASOURCE_USERNAME: jotheca_app
           SPRING_DATASOURCE_PASSWORD: ci-app-password
@@ -121,6 +121,7 @@ jobs:
           APP_PLATFORM_READ_DB_USER: jotheca_readall
           APP_PLATFORM_READ_DB_PASSWORD: ci-readall-password
           APP_JWT_SECRET: ci-smoke-secret-ci-smoke-secret-ci-smoke-secret-ci01
+          APP_PAYMENTS_PROVIDER: mock
           PUBLIC_BASE_URL: http://localhost:8080
           CORS_ORIGINS: http://localhost
           SWAGGER_ENABLED: "true"
