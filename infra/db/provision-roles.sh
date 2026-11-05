@@ -65,7 +65,7 @@ if [ "$JOTHECA_ASSIGN_OWNERSHIP" = "true" ]; then
   psql -v ON_ERROR_STOP=1 -v db_name="$PGDATABASE" <<-'EOSQL'
     ALTER DATABASE :"db_name" OWNER TO jotheca_migrate;
     ALTER SCHEMA public OWNER TO jotheca_migrate;
-  EOSQL
+EOSQL
 fi
 
 echo "provision-roles: jotheca_migrate / jotheca_app / jotheca_readall ready (passwords from env)."
