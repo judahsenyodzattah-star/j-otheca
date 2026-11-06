@@ -51,7 +51,8 @@ PG_CONTAINER="${SMOKE_PG_CONTAINER:-jotheca-rls-smoke}"
 # postgres, so the old default would have silently attached the smoke test to the dev database.
 PG_PORT="${SMOKE_PG_PORT:-5543}"
 PG_DB="${SMOKE_PG_DB:-jotheca}"
-PG_OWNER="${SMOKE_PG_OWNER:-jotheca_migrate}"   # fresh-DB path: the migration role owns the schema
+PG_BOOTSTRAP="${SMOKE_PG_BOOTSTRAP:-postgres}"   # disposable-DB bootstrap superuser
+PG_OWNER="${SMOKE_PG_OWNER:-jotheca_migrate}"   # migration/database owner role
 # Outside the compose stack's published range (3001/5532/6479/8100/8101/8180/9100-9103) so the two
 # can be run side by side; also probed for collisions below.
 APP_PORT="${SMOKE_APP_PORT:-18080}"
@@ -200,6 +201,7 @@ for _p in "$PG_PORT" "$APP_PORT"; do
   fi
 done
 
+PG_BOOTSTRAP_PW="$(rand_hex 18)"
 PG_OWNER_PW="$(rand_hex 18)"
 MIGRATE_PW="$PG_OWNER_PW"
 APP_PW="$(rand_hex 18)"
@@ -211,20 +213,28 @@ JWT_SECRET="smoke-$(rand_hex 24)"
 section "1. Real PostgreSQL ($PG_IMAGE) — fresh-DB path, migration role owns the schema"
 docker rm -f "$PG_CONTAINER" >/dev/null 2>&1 || true
 docker run -d --rm --name "$PG_CONTAINER" \
-  -e POSTGRES_USER="$PG_OWNER" -e POSTGRES_PASSWORD="$PG_OWNER_PW" -e POSTGRES_DB="$PG_DB" \
+  -e POSTGRES_USER="$PG_BOOTSTRAP" -e POSTGRES_PASSWORD="$PG_BOOTSTRAP_PW" -e POSTGRES_DB="$PG_DB" \
   -p "127.0.0.1:${PG_PORT}:5432" "$PG_IMAGE" >/dev/null
 ready=""
 for _ in $(seq 1 60); do
-  if docker exec "$PG_CONTAINER" pg_isready -U "$PG_OWNER" -d "$PG_DB" >/dev/null 2>&1; then ready=1; break; fi
+  if docker exec "$PG_CONTAINER" pg_isready -U "$PG_BOOTSTRAP" -d "$PG_DB" >/dev/null 2>&1; then ready=1; break; fi
   sleep 2
 done
 if [ -z "$ready" ]; then c_red "Postgres did not become ready"; docker logs "$PG_CONTAINER" | tail -30; exit 1; fi
-pass "Postgres ready on 127.0.0.1:${PG_PORT}/${PG_DB} (owner=${PG_OWNER})"
+pass "Postgres ready on 127.0.0.1:${PG_PORT}/${PG_DB} (bootstrap=${PG_BOOTSTRAP})"
+
+section "1a. Bootstrap PostgreSQL extensions"
+docker exec -e PGPASSWORD="$PG_BOOTSTRAP_PW" "$PG_CONTAINER" \
+  psql -U "$PG_BOOTSTRAP" -d "$PG_DB" -v ON_ERROR_STOP=1 \
+  -c "CREATE EXTENSION IF NOT EXISTS vector" \
+  -c "CREATE EXTENSION IF NOT EXISTS pg_trgm" >/dev/null
+pass "vector and pg_trgm installed by bootstrap"
 
 # ------------------------------------------------------------------------- 2. provision the roles
 section "2. Provision least-privilege roles (infra/db/provision-roles.sh)"
 if JOTHECA_MIGRATE_PW="$MIGRATE_PW" JOTHECA_APP_PW="$APP_PW" JOTHECA_READALL_PW="$READALL_PW" \
-   PGHOST=127.0.0.1 PGPORT="$PG_PORT" PGUSER="$PG_OWNER" PGDATABASE="$PG_DB" \
+   JOTHECA_ASSIGN_OWNERSHIP=true PGPASSWORD="$PG_BOOTSTRAP_PW" \
+   PGHOST=127.0.0.1 PGPORT="$PG_PORT" PGUSER="$PG_BOOTSTRAP" PGDATABASE="$PG_DB" \
    bash "$ROOT/infra/db/provision-roles.sh" >"$WORKDIR/provision.log" 2>&1; then
   pass "provision-roles.sh completed"
 else
@@ -267,13 +277,18 @@ pass "using jar: ${JAR#$ROOT/}"
 section "5. Boot the app: restricted-role=true, separate Flyway credentials"
 APP_LOG="$WORKDIR/app.log"
 # `env -u SPRING_PROFILES_ACTIVE` guarantees the dev profile (H2) can never be inherited from the
-# caller's environment — the whole point is to run against real Postgres with the real roles.
+# caller's environment — the whole point is to run against real Postgres with the real roles. The
+# explicit test profile only activates the existing offline payment provider; it does not select H2.
+# `app.datasource.restricted-role` and `app.datasource.platform-read.*` are bound only by
+# application-staging.yml. The explicit command-line arguments below keep the plane split active
+# even though this smoke test intentionally runs without the staging profile.
 env -u SPRING_PROFILES_ACTIVE \
+SPRING_PROFILES_ACTIVE="test" \
 SPRING_DATASOURCE_URL="jdbc:postgresql://127.0.0.1:${PG_PORT}/${PG_DB}" \
 SPRING_DATASOURCE_USERNAME="jotheca_app" \
 SPRING_DATASOURCE_PASSWORD="$APP_PW" \
 SPRING_FLYWAY_URL="jdbc:postgresql://127.0.0.1:${PG_PORT}/${PG_DB}" \
-SPRING_FLYWAY_USERNAME="jotheca_migrate" \
+SPRING_FLYWAY_USER="jotheca_migrate" \
 SPRING_FLYWAY_PASSWORD="$MIGRATE_PW" \
 APP_RESTRICTED_ROLE="true" \
 APP_PLATFORM_READ_DB_USER="jotheca_readall" \
@@ -283,14 +298,9 @@ PUBLIC_BASE_URL="http://127.0.0.1:${APP_PORT}" \
 CORS_ORIGINS="http://127.0.0.1" \
 STORAGE_PROVIDER="memory" \
 RATE_LIMIT_BACKEND="memory" \
+APP_PAYMENTS_PROVIDER="mock" \
+MANAGEMENT_HEALTH_MAIL_ENABLED="false" \
 SERVER_PORT="$APP_PORT" \
-# C2: app.datasource.restricted-role and app.datasource.platform-read.* are bound ONLY in
-# application-staging.yml (grep backend/src/main/resources to confirm). No staging profile is active
-# here, so the environment variables above would be inert: PlatformPlaneConfig is @ConditionalOnProperty
-# on that flag, would never activate, and the app would boot on Spring Boot's single default
-# datasource with NO plane split - while every assertion still passed. They are therefore passed as
-# EXPLICIT command-line arguments, which bind from the Environment regardless of the active profile.
-# The same values are still exported above so the intent is visible in one place.
 nohup java -jar "$JAR" \
   --app.datasource.restricted-role=true \
   --app.datasource.platform-read.username=jotheca_readall \
@@ -300,14 +310,36 @@ APP_PID=$!
 c_ylw "app pid=$APP_PID"
 
 up=""
+HEALTH_STATUS="000"
+HEALTH_RESPONSE="$WORKDIR/health-response"
+: > "$HEALTH_RESPONSE"
 for _ in $(seq 1 90); do
-  [ "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${APP_PORT}/actuator/health" || true)" = "200" ] && { up=1; break; }
+  HEALTH_STATUS="$(curl -sS -o "$HEALTH_RESPONSE" -w '%{http_code}' "http://127.0.0.1:${APP_PORT}/actuator/health" || true)"
+  [ "$HEALTH_STATUS" = "200" ] && { up=1; break; }
   kill -0 "$APP_PID" 2>/dev/null || break
   sleep 2
 done
 if [ -z "$up" ]; then
   fail "app never became healthy"
-  c_red "---- last 60 log lines ----"; tail -60 "$APP_LOG"; exit 1
+  if kill -0 "$APP_PID" 2>/dev/null; then
+    c_red "application process state: running (pid=$APP_PID)"
+  else
+    c_red "application process state: exited"
+  fi
+  c_red "health HTTP status: $HEALTH_STATUS"
+  HEALTH_STATUSES="$(tr -d '\r\n ' < "$HEALTH_RESPONSE" | grep -oE '\"status\":\"(UP|DOWN|OUT_OF_SERVICE|UNKNOWN)\"' | sort -u | head -c 300 || true)"
+  HEALTH_COMPONENTS=""
+  for component in db mail diskSpace ping; do
+    if grep -q "\"$component\"" "$HEALTH_RESPONSE" 2>/dev/null; then
+      HEALTH_COMPONENTS="${HEALTH_COMPONENTS}${HEALTH_COMPONENTS:+,}$component"
+    fi
+  done
+  c_red "allowlisted health summary: statuses=${HEALTH_STATUSES:-none} components=${HEALTH_COMPONENTS:-none}"
+  c_red "---- first relevant application exception ----"
+  FIRST_EXCEPTION="$(grep -m1 -oE '(java|org|com)\.[A-Za-z0-9_.]+[A-Za-z0-9_$]+Exception' "$APP_LOG" 2>/dev/null || true)"
+  c_red "exception_class=${FIRST_EXCEPTION:-none found}"
+  c_red "application log content withheld to prevent credential or token disclosure"
+  exit 1
 fi
 assert_contains "GET /actuator/health is UP" "$(curl -s "http://127.0.0.1:${APP_PORT}/actuator/health" || true)" '"status":"UP"'
 # C2 regression guard: a healthy app proves NOTHING about the plane split. If restricted-role did not
@@ -334,6 +366,14 @@ assert_eq "29 tenant-isolation policies installed" "29" \
   "$(psql_owner "SELECT count(*) FROM pg_policies WHERE policyname LIKE '%tenant_isolation'")"
 assert_eq "29 tenant tables with FORCE RLS enabled" "29" \
   "$(psql_owner "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relrowsecurity AND c.relforcerowsecurity")"
+assert_eq "jotheca_app has no discovery schema USAGE before explicit grant design" "f" \
+  "$(psql_owner "SELECT has_schema_privilege('jotheca_app', 'discovery', 'USAGE')")"
+assert_eq "jotheca_readall has no discovery schema USAGE before explicit grant design" "f" \
+  "$(psql_owner "SELECT has_schema_privilege('jotheca_readall', 'discovery', 'USAGE')")"
+LEAK="$(expect_sql_failure jotheca_app "$APP_PW" "SELECT count(*) FROM discovery.editions")"
+assert_eq "jotheca_app cannot read discovery before explicit grant design" "OK" "$LEAK"
+LEAK="$(expect_sql_failure jotheca_readall "$READALL_PW" "SELECT count(*) FROM discovery.editions")"
+assert_eq "jotheca_readall cannot read discovery before explicit grant design" "OK" "$LEAK"
 assert_eq "both least-privilege pools are actually in use" "2" \
   "$(psql_owner "SELECT count(DISTINCT usename) FROM pg_stat_activity WHERE usename IN ('jotheca_app','jotheca_readall')")"
 

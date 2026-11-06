@@ -73,6 +73,10 @@ public class Book extends TenantScopedEntity {
     @Column(nullable = false)
     private boolean published = true;
 
+    /** Explicit future opt-in to the global discovery surface. */
+    @Column(name = "global_discoverable", nullable = false)
+    private boolean globalDiscoverable;
+
     /** The platform user who authored this title (author/personal libraries, spec §24); null for 3rd-party works. */
     @Column(name = "author_user_id", length = 36)
     private String authorUserId;
@@ -129,6 +133,10 @@ public class Book extends TenantScopedEntity {
     public void setRatingCount(int ratingCount) { this.ratingCount = ratingCount; }
     public boolean isPublished() { return published; }
     public void setPublished(boolean published) { this.published = published; }
+    public boolean isGlobalDiscoverable() { return globalDiscoverable; }
+    public void setGlobalDiscoverable(boolean globalDiscoverable) {
+        this.globalDiscoverable = globalDiscoverable;
+    }
     public String getAuthorUserId() { return authorUserId; }
     public void setAuthorUserId(String authorUserId) { this.authorUserId = authorUserId; }
     public String getAuthorProfileId() { return authorProfileId; }

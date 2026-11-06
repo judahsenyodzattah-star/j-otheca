@@ -29,6 +29,8 @@ set -euo pipefail
 REPORTS_DIR="${REPORTS_DIR:-target/surefire-reports}"
 RLS_CLASS="${RLS_TEST_CLASS:-com.jotheca.tenancy.RlsTenantIsolationTest}"
 RLS_REPORT="${REPORTS_DIR}/TEST-${RLS_CLASS}.xml"
+DISCOVERY_CLASS="${DISCOVERY_TEST_CLASS:-com.jotheca.discovery.DiscoveryPostgresSchemaTest}"
+DISCOVERY_REPORT="${REPORTS_DIR}/TEST-${DISCOVERY_CLASS}.xml"
 
 die() { echo "::error::$*"; echo "RLS GATE FAILED: $*"; exit 1; }
 
@@ -44,9 +46,10 @@ echo "RLS GATE: docker daemon reachable."
 # ---------------------------------------------------------------- 2. the report must exist
 [ -d "$REPORTS_DIR" ] || die "no surefire reports at ${REPORTS_DIR} — did 'mvn verify' run the tests?"
 [ -f "$RLS_REPORT" ] || die "${RLS_REPORT} is missing — ${RLS_CLASS} never executed."
+[ -f "$DISCOVERY_REPORT" ] || die "${DISCOVERY_REPORT} is missing — ${DISCOVERY_CLASS} never executed."
 
 # ---------------------------------------------------------------- 3-5. parse the reports
-REPORTS_DIR="$REPORTS_DIR" RLS_REPORT="$RLS_REPORT" python3 - <<'PY' || exit 1
+REPORTS_DIR="$REPORTS_DIR" RLS_REPORT="$RLS_REPORT" DISCOVERY_REPORT="$DISCOVERY_REPORT" python3 - <<'PY' || exit 1
 import glob
 import os
 import sys
@@ -79,6 +82,16 @@ if skipped != 0:
     sys.exit(1)
 if failures or errors:
     print(f"::error::{rls_report} reported {failures} failure(s) and {errors} error(s).")
+    sys.exit(1)
+
+# --- the discovery schema suite itself --------------------------------------------------
+discovery = ET.parse(os.environ["DISCOVERY_REPORT"]).getroot()
+d_tests, d_failures, d_errors, d_skipped = (attr(discovery, "tests"), attr(discovery, "failures"),
+                                            attr(discovery, "errors"), attr(discovery, "skipped"))
+print(f"RLS GATE: {os.path.basename(os.environ['DISCOVERY_REPORT'])} -> tests={d_tests} "
+      f"failures={d_failures} errors={d_errors} skipped={d_skipped}")
+if d_tests == 0 or d_skipped or d_failures or d_errors:
+    print("::error::The PostgreSQL discovery schema suite did not execute cleanly.")
     sys.exit(1)
 
 # --- nothing anywhere in the run may be skipped -----------------------------------------

@@ -12,12 +12,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.JsonNode;
 import com.jotheca.seed.DevDataSeeder;
 import com.jotheca.support.TestApi;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -36,6 +38,17 @@ import org.springframework.test.web.servlet.MvcResult;
 class TenantIsolationTest {
 
     @Autowired MockMvc mvc;
+    @Autowired JdbcTemplate jdbc;
+
+    private String roleTestMembershipId;
+
+    @AfterEach
+    void restoreRoleTestFixture() {
+        if (roleTestMembershipId != null) {
+            jdbc.update("UPDATE memberships SET role = 'PATRON' WHERE id = ?", roleTestMembershipId);
+            roleTestMembershipId = null;
+        }
+    }
 
     // ---------- layer: tenant resolution ----------
 
@@ -301,6 +314,7 @@ class TenantIsolationTest {
             if (email.equals(row.path("email").asText())) membershipId = row.path("id").asText();
         }
         assertThat(membershipId).isNotNull();
+        roleTestMembershipId = membershipId;
         mvc.perform(post("/api/v1/tenant/members/" + membershipId + "/approve")
                         .header("Authorization", TestApi.bearer(libadmin))
                         .header("X-Library-Id", DevDataSeeder.PENTECOST_UID))

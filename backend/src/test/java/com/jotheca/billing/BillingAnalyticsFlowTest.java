@@ -253,12 +253,17 @@ class BillingAnalyticsFlowTest {
     void planChangeDowngradeAndUpgradeRoundTrip() throws Exception {
         // Pentecost usage (2 staff, 3 books, 1 branch, ≤100 approved members, storage « 5 GB)
         // fits STARTER — the move is allowed and audited.
-        mvc.perform(platform(post("/api/v1/platform/libraries/{id}/plan", pentecostId))
+        MvcResult downgrade = mvc.perform(platform(post("/api/v1/platform/libraries/{id}/plan", pentecostId))
                         .content("{\"planCode\":\"STARTER\",\"reason\":\"annual lapsed\"}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.fromPlan").value("PROFESSIONAL"))
-                .andExpect(jsonPath("$.toPlan").value("STARTER"))
-                .andExpect(jsonPath("$.direction").value("DOWNGRADE"));
+                .andReturn();
+        assertThat(downgrade.getResponse().getStatus())
+                .withFailMessage("downgrade response=%s usage=%s targetLimits=%s",
+                        downgrade.getResponse().getContentAsString(), pentecostUsage(), starterLimits())
+                .isEqualTo(200);
+        JsonNode downgradeBody = parse(downgrade);
+        assertThat(downgradeBody.path("fromPlan").asText()).isEqualTo("PROFESSIONAL");
+        assertThat(downgradeBody.path("toPlan").asText()).isEqualTo("STARTER");
+        assertThat(downgradeBody.path("direction").asText()).isEqualTo("DOWNGRADE");
 
         // effective limits NOW reflect STARTER + the purchased 2 GB add-on (data, not code)
         mvc.perform(api(get("/api/v1/tenant/billing/subscription"), libadmin))
@@ -274,6 +279,26 @@ class BillingAnalyticsFlowTest {
         mvc.perform(api(get("/api/v1/tenant/billing/subscription"), libadmin))
                 .andExpect(jsonPath("$.planCode").value("PROFESSIONAL"))
                 .andExpect(jsonPath("$.effectiveLimits.storageGb").value(52));
+    }
+
+    private String pentecostUsage() {
+        long members = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM memberships WHERE tenant_id = ? AND status = 'APPROVED'",
+                Long.class, pentecostId);
+        long staff = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM memberships WHERE tenant_id = ? AND status = 'APPROVED' "
+                        + "AND role IN ('LIBRARY_ADMIN', 'LIBRARIAN')",
+                Long.class, pentecostId);
+        long books = jdbc.queryForObject("SELECT COUNT(*) FROM books WHERE tenant_id = ?", Long.class, pentecostId);
+        long branches = jdbc.queryForObject("SELECT COUNT(*) FROM branches WHERE tenant_id = ?", Long.class, pentecostId);
+        long storage = storageUsage.usageOf(pentecostId);
+        return "{members=" + members + ", staff=" + staff + ", books=" + books
+                + ", branches=" + branches + ", storageBytes=" + storage + "}";
+    }
+
+    private String starterLimits() {
+        return jdbc.queryForObject("SELECT limits FROM subscription_plans WHERE code = 'STARTER'",
+                String.class);
     }
 
     // ---------- 7: patron online fine rail ----------

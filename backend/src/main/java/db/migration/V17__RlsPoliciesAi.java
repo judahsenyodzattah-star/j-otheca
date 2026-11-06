@@ -7,9 +7,9 @@ import org.flywaydb.core.api.migration.Context;
 /**
  * PG-only hardening for the AI tables (no-op on H2, mirroring previous RLS migrations):
  *  - RLS tenant policies on the three new tables (isolation layer 6 backstop);
- *  - pgvector extension + HNSW ANN index over (embedding::vector) so the pgvector search
- *    backend (app.ai.search.backend=pgvector) gets true approximate NN on large catalogs.
- *    The expressional cast keeps JPA's portable TEXT writes working unchanged.
+ *  - pgvector extension for future dimensioned-vector projections.
+ *    Embeddings remain portable TEXT because local and OpenAI providers may use different
+ *    dimensions. PostgreSQL cannot build one valid HNSW index over a dimensionless cast.
  */
 public class V17__RlsPoliciesAi extends BaseJavaMigration {
 
@@ -36,12 +36,9 @@ public class V17__RlsPoliciesAi extends BaseJavaMigration {
                         )
                         """.formatted(table, table));
             }
-            // pgvector ANN (isolation layer 9: even ANN scans are scoped by tenant_id predicate)
+            // Keep the extension available without creating an invalid dimensionless HNSW
+            // index. The embedding column is portable TEXT and provider dimensions vary.
             st.execute("CREATE EXTENSION IF NOT EXISTS vector");
-            st.execute("""
-                    CREATE INDEX IF NOT EXISTS idx_book_embeddings_hnsw
-                    ON book_embeddings USING hnsw ((embedding::vector) vector_cosine_ops)
-                    """);
         }
     }
 }
