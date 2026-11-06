@@ -299,6 +299,7 @@ CORS_ORIGINS="http://127.0.0.1" \
 STORAGE_PROVIDER="memory" \
 RATE_LIMIT_BACKEND="memory" \
 APP_PAYMENTS_PROVIDER="mock" \
+MANAGEMENT_HEALTH_MAIL_ENABLED="false" \
 SERVER_PORT="$APP_PORT" \
 nohup java -jar "$JAR" \
   --app.datasource.restricted-role=true \
@@ -309,14 +310,36 @@ APP_PID=$!
 c_ylw "app pid=$APP_PID"
 
 up=""
+HEALTH_STATUS="000"
+HEALTH_RESPONSE="$WORKDIR/health-response"
+: > "$HEALTH_RESPONSE"
 for _ in $(seq 1 90); do
-  [ "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${APP_PORT}/actuator/health" || true)" = "200" ] && { up=1; break; }
+  HEALTH_STATUS="$(curl -sS -o "$HEALTH_RESPONSE" -w '%{http_code}' "http://127.0.0.1:${APP_PORT}/actuator/health" || true)"
+  [ "$HEALTH_STATUS" = "200" ] && { up=1; break; }
   kill -0 "$APP_PID" 2>/dev/null || break
   sleep 2
 done
 if [ -z "$up" ]; then
   fail "app never became healthy"
-  c_red "---- last 60 log lines ----"; tail -60 "$APP_LOG"; exit 1
+  if kill -0 "$APP_PID" 2>/dev/null; then
+    c_red "application process state: running (pid=$APP_PID)"
+  else
+    c_red "application process state: exited"
+  fi
+  c_red "health HTTP status: $HEALTH_STATUS"
+  HEALTH_STATUSES="$(tr -d '\r\n ' < "$HEALTH_RESPONSE" | grep -oE '\"status\":\"(UP|DOWN|OUT_OF_SERVICE|UNKNOWN)\"' | sort -u | head -c 300 || true)"
+  HEALTH_COMPONENTS=""
+  for component in db mail diskSpace ping; do
+    if grep -q "\"$component\"" "$HEALTH_RESPONSE" 2>/dev/null; then
+      HEALTH_COMPONENTS="${HEALTH_COMPONENTS}${HEALTH_COMPONENTS:+,}$component"
+    fi
+  done
+  c_red "allowlisted health summary: statuses=${HEALTH_STATUSES:-none} components=${HEALTH_COMPONENTS:-none}"
+  c_red "---- first relevant application exception ----"
+  FIRST_EXCEPTION="$(grep -m1 -oE '(java|org|com)\.[A-Za-z0-9_.]+[A-Za-z0-9_$]+Exception' "$APP_LOG" 2>/dev/null || true)"
+  c_red "exception_class=${FIRST_EXCEPTION:-none found}"
+  c_red "application log content withheld to prevent credential or token disclosure"
+  exit 1
 fi
 assert_contains "GET /actuator/health is UP" "$(curl -s "http://127.0.0.1:${APP_PORT}/actuator/health" || true)" '"status":"UP"'
 # C2 regression guard: a healthy app proves NOTHING about the plane split. If restricted-role did not
