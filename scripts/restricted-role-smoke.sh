@@ -277,11 +277,13 @@ pass "using jar: ${JAR#$ROOT/}"
 section "5. Boot the app: restricted-role=true, separate Flyway credentials"
 APP_LOG="$WORKDIR/app.log"
 # `env -u SPRING_PROFILES_ACTIVE` guarantees the dev profile (H2) can never be inherited from the
-# caller's environment — the whole point is to run against real Postgres with the real roles.
+# caller's environment — the whole point is to run against real Postgres with the real roles. The
+# explicit test profile only activates the existing offline payment provider; it does not select H2.
 # `app.datasource.restricted-role` and `app.datasource.platform-read.*` are bound only by
 # application-staging.yml. The explicit command-line arguments below keep the plane split active
 # even though this smoke test intentionally runs without the staging profile.
 env -u SPRING_PROFILES_ACTIVE \
+SPRING_PROFILES_ACTIVE="test" \
 SPRING_DATASOURCE_URL="jdbc:postgresql://127.0.0.1:${PG_PORT}/${PG_DB}" \
 SPRING_DATASOURCE_USERNAME="jotheca_app" \
 SPRING_DATASOURCE_PASSWORD="$APP_PW" \
@@ -296,6 +298,7 @@ PUBLIC_BASE_URL="http://127.0.0.1:${APP_PORT}" \
 CORS_ORIGINS="http://127.0.0.1" \
 STORAGE_PROVIDER="memory" \
 RATE_LIMIT_BACKEND="memory" \
+APP_PAYMENTS_PROVIDER="mock" \
 SERVER_PORT="$APP_PORT" \
 nohup java -jar "$JAR" \
   --app.datasource.restricted-role=true \
