@@ -4,14 +4,23 @@
 library;
 
 class AuthTokens {
-  AuthTokens({required this.accessToken, required this.refreshToken, required this.expiresInSeconds});
+  AuthTokens(
+      {required this.accessToken,
+      required this.refreshToken,
+      required this.expiresInSeconds});
   final String accessToken;
   final String refreshToken;
   final int expiresInSeconds;
 }
 
 class AppUser {
-  AppUser({required this.id, required this.email, required this.fullName, required this.globalRole, required this.emailVerified, this.phone});
+  AppUser(
+      {required this.id,
+      required this.email,
+      required this.fullName,
+      required this.globalRole,
+      required this.emailVerified,
+      this.phone});
   final String id;
   final String email;
   final String fullName;
@@ -30,8 +39,16 @@ class AppUser {
 }
 
 class LibraryCard {
-  LibraryCard({required this.slug, required this.name, required this.type, required this.joinPolicy,
-      this.city, this.country, this.description, this.openingHours, required this.memberCount});
+  LibraryCard(
+      {required this.slug,
+      required this.name,
+      required this.type,
+      required this.joinPolicy,
+      this.city,
+      this.country,
+      this.description,
+      this.openingHours,
+      required this.memberCount});
   final String slug;
   final String name;
   final String type;
@@ -55,9 +72,66 @@ class LibraryCard {
       );
 }
 
+/// Public profile returned by GET /api/v1/libraries/{slug}.
+/// Visibility and ACTIVE status are enforced by the backend before this DTO is returned.
+class LibraryProfile {
+  LibraryProfile({
+    required this.slug,
+    required this.name,
+    required this.type,
+    required this.joinPolicy,
+    this.city,
+    this.country,
+    this.address,
+    this.description,
+    this.openingHours,
+    this.services,
+    this.logoRef,
+    this.bannerRef,
+    required this.memberCount,
+  });
+
+  final String slug;
+  final String name;
+  final String type;
+  final String joinPolicy;
+  final String? city;
+  final String? country;
+  final String? address;
+  final String? description;
+  final String? openingHours;
+  final String? services;
+  final String? logoRef;
+  final String? bannerRef;
+  final int memberCount;
+
+  factory LibraryProfile.fromJson(Map<String, dynamic> j) => LibraryProfile(
+        slug: j['slug'] as String,
+        name: j['name'] as String,
+        type: j['type'] as String,
+        joinPolicy: j['joinPolicy'] as String,
+        city: j['city'] as String?,
+        country: j['country'] as String?,
+        address: j['address'] as String?,
+        description: j['description'] as String?,
+        openingHours: j['openingHours'] as String?,
+        services: j['services'] as String?,
+        logoRef: j['logoRef'] as String?,
+        bannerRef: j['bannerRef'] as String?,
+        memberCount: j['memberCount'] as int,
+      );
+}
+
 class MyMembership {
-  MyMembership({required this.membershipId, required this.libraryUid, this.librarySlug, this.libraryName,
-      required this.role, required this.membershipType, required this.status, this.membershipNumber});
+  MyMembership(
+      {required this.membershipId,
+      required this.libraryUid,
+      this.librarySlug,
+      this.libraryName,
+      required this.role,
+      required this.membershipType,
+      required this.status,
+      this.membershipNumber});
   final String membershipId;
   final String libraryUid;
   final String? librarySlug;
@@ -82,8 +156,15 @@ class MyMembership {
 }
 
 class InvitationPreview {
-  InvitationPreview({required this.librarySlug, required this.libraryName, required this.libraryType,
-      this.city, this.country, this.description, required this.membership, required this.requiresApproval});
+  InvitationPreview(
+      {required this.librarySlug,
+      required this.libraryName,
+      required this.libraryType,
+      this.city,
+      this.country,
+      this.description,
+      required this.membership,
+      required this.requiresApproval});
   final String librarySlug;
   final String libraryName;
   final String libraryType;
@@ -93,7 +174,8 @@ class InvitationPreview {
   final String membership;
   final bool requiresApproval;
 
-  factory InvitationPreview.fromJson(Map<String, dynamic> j) => InvitationPreview(
+  factory InvitationPreview.fromJson(Map<String, dynamic> j) =>
+      InvitationPreview(
         librarySlug: j['librarySlug'] as String,
         libraryName: j['libraryName'] as String,
         libraryType: j['libraryType'] as String,
@@ -106,5 +188,8 @@ class InvitationPreview {
 }
 
 /// Display helper used by list UIs.
-String prettyEnum(String raw) =>
-    raw.toLowerCase().split('_').map((w) => w.isEmpty ? w : w[0].toUpperCase() + w.substring(1)).join(' ');
+String prettyEnum(String raw) => raw
+    .toLowerCase()
+    .split('_')
+    .map((w) => w.isEmpty ? w : w[0].toUpperCase() + w.substring(1))
+    .join(' ');

@@ -1,58 +1,89 @@
 import 'package:flutter/material.dart';
-import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../core/api_client.dart';
 import '../../core/models.dart';
 import '../../core/session.dart';
 import '../../core/widgets/role_nav.dart';
+import 'discovery_api.dart';
 
-final _apiProvider = Provider((ref) => ApiClient(baseUrl: ApiClient.defaultBaseUrl()));
+final _apiProvider =
+    Provider((ref) => ApiClient(baseUrl: ApiClient.defaultBaseUrl()));
 
-final _librariesProvider = FutureProvider.autoDispose
-    .family<List<LibraryCard>, String?>((ref, search) async {
-  final api = ref.watch(_apiProvider);
-  final res = await api.dio.get('/api/v1/libraries',
-      queryParameters: search == null || search.isEmpty ? null : {'search': search});
-  final content = (res.data['content'] as List).cast<Map<String, dynamic>>();
-  return content.map(LibraryCard.fromJson).toList();
+final librariesProvider = FutureProvider.autoDispose
+    .family<List<LibraryCard>, LibraryDiscoveryFilters>((ref, filters) async {
+  final api = LibraryDiscoveryApi(ref.watch(_apiProvider));
+  return api.search(filters);
 });
 
-final _membershipsProvider = FutureProvider.autoDispose<List<MyMembership>>((ref) async {
+final membershipsProvider =
+    FutureProvider.autoDispose<List<MyMembership>>((ref) async {
   final session = ref.watch(sessionProvider);
-  if (!session.isSignedIn) return [];
-  final api = ref.watch(_apiProvider);
-  final res = await api.dio.get('/api/v1/me/memberships',
-      options: Options(headers: {'Authorization': 'Bearer ${session.accessToken}'}));
-  final list = (res.data as List).cast<Map<String, dynamic>>().map(MyMembership.fromJson).toList();
+  final api = LibraryDiscoveryApi(ref.watch(_apiProvider));
+  final list = await api.memberships(session);
   ref.read(sessionProvider.notifier).setMemberships(list);
   return list;
 });
 
 class DiscoveryPage extends ConsumerStatefulWidget {
   const DiscoveryPage({super.key});
+
   @override
   ConsumerState<DiscoveryPage> createState() => _DiscoveryPageState();
 }
 
 class _DiscoveryPageState extends ConsumerState<DiscoveryPage> {
   final _search = TextEditingController();
-  String? _query;
+  final _country = TextEditingController();
+  final _city = TextEditingController();
+  String? _type;
+  LibraryDiscoveryFilters _filters = const LibraryDiscoveryFilters();
+
+  @override
+  void dispose() {
+    _search.dispose();
+    _country.dispose();
+    _city.dispose();
+    super.dispose();
+  }
+
+  void _applyFilters() {
+    setState(() {
+      _filters = LibraryDiscoveryFilters(
+        search: _search.text,
+        country: _country.text,
+        city: _city.text,
+        type: _type,
+      );
+    });
+  }
+
+  void _clearFilters() {
+    _search.clear();
+    _country.clear();
+    _city.clear();
+    setState(() {
+      _type = null;
+      _filters = const LibraryDiscoveryFilters();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    final memberships = ref.watch(_membershipsProvider);
-    final libraries = ref.watch(_librariesProvider(_query));
+    final memberships = ref.watch(membershipsProvider);
+    final libraries = ref.watch(librariesProvider(_filters));
     final session = ref.watch(sessionProvider);
     return Scaffold(
       bottomNavigationBar: RoleNavBar(
         current: 'discover',
-        items: roleNavItems(session.activeRole, isSuperAdmin: session.isSuperAdmin),
+        items: roleNavItems(session.activeRole,
+            isSuperAdmin: session.isSuperAdmin),
       ),
       appBar: AppBar(
         title: const Text('Discover Libraries'),
         actions: [
-          if (ref.watch(sessionProvider).approved.isNotEmpty)
+          if (session.approved.isNotEmpty)
             IconButton(
               tooltip: 'My libraries',
               icon: const Icon(Icons.library_books_outlined),
@@ -70,46 +101,142 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage> {
       ),
       body: memberships.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Could not load memberships')),
-        data: (mine) {
-          return CustomScrollView(slivers: [
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: SearchBar(
-                  controller: _search,
-                  hintText: 'Search by name or description…',
-                  trailing: [IconButton(tooltip: 'Search', icon: const Icon(Icons.search), onPressed: () => setState(() => _query = _search.text))],
-                  onSubmitted: (v) => setState(() => _query = v),
-                ),
-              ),
-            ),
-            // Empty state (spec §12): brand-new accounts have no memberships yet
+        error: (e, _) =>
+            const Center(child: Text('Could not load memberships')),
+        data: (mine) => CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(child: _filtersPanel()),
             if (mine.isEmpty)
-              SliverToBoxAdapter(
+              const SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.all(32),
-                  child: Column(children: [
-                    const Icon(Icons.local_library_outlined, size: 48),
-                    const SizedBox(height: 12),
-                    Text("You haven't joined a library yet.", style: Theme.of(context).textTheme.titleMedium),
-                    const SizedBox(height: 4),
-                    const Text('Discover one below, or open an invitation link from your institution.'),
-                  ]),
+                  padding: EdgeInsets.all(32),
+                  child: Column(
+                    children: [
+                      Icon(Icons.local_library_outlined, size: 48),
+                      SizedBox(height: 12),
+                      Text("You haven't joined a library yet."),
+                      SizedBox(height: 4),
+                      Text(
+                          'Discover one below, or open an invitation link from your institution.'),
+                    ],
+                  ),
                 ),
               ),
             libraries.when(
-              loading: () => const SliverToBoxAdapter(child: Padding(
-                  padding: EdgeInsets.all(48), child: Center(child: CircularProgressIndicator()))),
-              error: (e, _) => SliverToBoxAdapter(child: Padding(
-                  padding: const EdgeInsets.all(32), child: Text('Could not load libraries: $e'))),
-              data: (list) => SliverList.builder(
-                itemCount: list.length,
-                itemBuilder: (context, i) => _LibraryTile(card: list[i], mine: mine),
+              loading: () => const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.all(48),
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+              ),
+              error: (e, _) => const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.all(32),
+                  child: Text('Could not load public libraries.'),
+                ),
+              ),
+              data: (list) => list.isEmpty
+                  ? const SliverToBoxAdapter(
+                      child: Padding(
+                        padding: EdgeInsets.all(32),
+                        child: Center(
+                            child: Text(
+                                'No public libraries match these filters.')),
+                      ),
+                    )
+                  : SliverList.builder(
+                      itemCount: list.length,
+                      itemBuilder: (context, i) =>
+                          _LibraryTile(card: list[i], mine: mine),
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _filtersPanel() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: Card(
+        child: ExpansionTile(
+          initiallyExpanded: true,
+          title: const Text('Find a public library'),
+          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          children: [
+            TextField(
+              controller: _search,
+              decoration: const InputDecoration(
+                labelText: 'Name or description',
+                prefixIcon: Icon(Icons.search),
+              ),
+              textInputAction: TextInputAction.search,
+              onSubmitted: (_) => _applyFilters(),
+            ),
+            const SizedBox(height: 12),
+            LayoutBuilder(
+              builder: (context, constraints) => Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  SizedBox(
+                    width:
+                        constraints.maxWidth > 600 ? 220 : constraints.maxWidth,
+                    child: TextField(
+                      controller: _country,
+                      decoration: const InputDecoration(labelText: 'Country'),
+                    ),
+                  ),
+                  SizedBox(
+                    width:
+                        constraints.maxWidth > 600 ? 220 : constraints.maxWidth,
+                    child: TextField(
+                      controller: _city,
+                      decoration: const InputDecoration(labelText: 'City'),
+                    ),
+                  ),
+                  SizedBox(
+                    width:
+                        constraints.maxWidth > 600 ? 220 : constraints.maxWidth,
+                    child: DropdownButtonFormField<String>(
+                      initialValue: _type,
+                      decoration:
+                          const InputDecoration(labelText: 'Library type'),
+                      items: [
+                        for (final type in const [
+                          'UNIVERSITY',
+                          'SCHOOL',
+                          'PUBLIC',
+                          'PRIVATE',
+                          'CORPORATE',
+                          'RESEARCH',
+                          'PERSONAL',
+                        ])
+                          DropdownMenuItem(
+                              value: type, child: Text(prettyEnum(type))),
+                      ],
+                      onChanged: (value) => setState(() => _type = value),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ]);
-        },
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                TextButton(
+                    onPressed: _clearFilters, child: const Text('Clear')),
+                const Spacer(),
+                FilledButton.icon(
+                  onPressed: _applyFilters,
+                  icon: const Icon(Icons.search),
+                  label: const Text('Apply filters'),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -117,33 +244,56 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage> {
 
 class _LibraryTile extends StatelessWidget {
   const _LibraryTile({required this.card, required this.mine});
+
   final LibraryCard card;
   final List<MyMembership> mine;
 
   @override
   Widget build(BuildContext context) {
-    final joined = mine.any((m) => m.librarySlug == card.slug && m.isApproved);
-    final pending = mine.any((m) => m.librarySlug == card.slug && m.status == 'PENDING');
+    final membership =
+        mine.where((m) => m.librarySlug == card.slug).firstOrNull;
+    final status = membership?.status;
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      child: ListTile(
-        title: Text(card.name),
-        subtitle: Text([
-          if (card.city != null) card.city!,
-          if (card.country != null) card.country!,
-          prettyEnum(card.type),
-          '${card.memberCount} members',
-          prettyEnum(card.joinPolicy),
-        ].join(' · ')),
-        trailing: joined
-            ? const Chip(label: Text('Member'))
-            : pending
-                ? const Chip(label: Text('Pending'))
-                : FilledButton.tonal(
-                    onPressed: () => context.go('/join/library/${card.slug}'),
-                    child: const Text('Join'),
-                  ),
+      child: InkWell(
+        onTap: () => context.push(libraryProfilePath(card.slug)),
+        child: ListTile(
+          title: Text(card.name),
+          subtitle: Text([
+            if (card.city != null) card.city!,
+            if (card.country != null) card.country!,
+            prettyEnum(card.type),
+            '${card.memberCount} members',
+            prettyEnum(card.joinPolicy),
+          ].join(' · ')),
+          trailing: status == null
+              ? FilledButton.tonal(
+                  onPressed: () => context.go('/join/library/${card.slug}'),
+                  child: const Text('Join'),
+                )
+              : Chip(
+                  label: Text(_membershipLabel(status)),
+                  avatar: Icon(_membershipIcon(status), size: 18)),
+        ),
       ),
     );
   }
+
+  String _membershipLabel(String status) => switch (status) {
+        'APPROVED' => 'Member',
+        'PENDING' => 'Pending approval',
+        'REJECTED' => 'Request declined',
+        'SUSPENDED' => 'Membership suspended',
+        'EXPIRED' => 'Membership expired',
+        _ => prettyEnum(status),
+      };
+
+  IconData _membershipIcon(String status) => switch (status) {
+        'APPROVED' => Icons.check_circle_outline,
+        'PENDING' => Icons.schedule_outlined,
+        'REJECTED' => Icons.block_outlined,
+        'SUSPENDED' => Icons.pause_circle_outline,
+        'EXPIRED' => Icons.event_busy_outlined,
+        _ => Icons.info_outline,
+      };
 }
