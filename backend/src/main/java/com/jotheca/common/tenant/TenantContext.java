@@ -25,6 +25,12 @@ public final class TenantContext {
 
     private static final ThreadLocal<Current> CURRENT = new ThreadLocal<>();
     private static final ThreadLocal<String> PROVISIONAL_DATABASE_TENANT = new ThreadLocal<>();
+    private static final ThreadLocal<DiagnosticState> DIAGNOSTIC = new ThreadLocal<>();
+
+    private record DiagnosticState(boolean provisionalScopePresent,
+                                   boolean transactionActive,
+                                   boolean tenantArmingAttempted,
+                                   boolean tenantArmingSucceeded) {}
 
     private TenantContext() {}
 
@@ -56,6 +62,40 @@ public final class TenantContext {
         return current != null ? current.libraryId() : PROVISIONAL_DATABASE_TENANT.get();
     }
 
+    /** Diagnostic-only state; it does not expose the tenant id or grant authorization. */
+    public static boolean hasProvisionalDatabaseScope() {
+        return PROVISIONAL_DATABASE_TENANT.get() != null && CURRENT.get() == null;
+    }
+
+    /** Begin failure-only membership diagnostics without opening a connection or changing scope. */
+    public static void beginMembershipDiagnostics(boolean transactionActive) {
+        DIAGNOSTIC.set(new DiagnosticState(hasProvisionalDatabaseScope(), transactionActive, false, false));
+    }
+
+    /** Record datasource arming state for the current membership lookup, without exposing tenant data. */
+    static void recordTenantArming(boolean succeeded) {
+        DiagnosticState state = DIAGNOSTIC.get();
+        if (state != null) {
+            DIAGNOSTIC.set(new DiagnosticState(
+                    state.provisionalScopePresent(), true, true, succeeded));
+        }
+    }
+
+    /** Return only allowlisted boolean states for a failed membership lookup. */
+    public static String membershipDiagnosticSummary(boolean membershipFound) {
+        DiagnosticState state = DIAGNOSTIC.get();
+        if (state == null) {
+            return "provisional_scope_present=false transaction_active=false "
+                    + "tenant_arming_attempted=false tenant_arming_succeeded=false membership_found="
+                    + membershipFound;
+        }
+        return "provisional_scope_present=" + state.provisionalScopePresent()
+                + " transaction_active=" + state.transactionActive()
+                + " tenant_arming_attempted=" + state.tenantArmingAttempted()
+                + " tenant_arming_succeeded=" + state.tenantArmingSucceeded()
+                + " membership_found=" + membershipFound;
+    }
+
     public static String requireLibraryId() {
         Current c = CURRENT.get();
         if (c == null) {
@@ -76,5 +116,6 @@ public final class TenantContext {
     public static void clear() {
         CURRENT.remove();
         PROVISIONAL_DATABASE_TENANT.remove();
+        DIAGNOSTIC.remove();
     }
 }

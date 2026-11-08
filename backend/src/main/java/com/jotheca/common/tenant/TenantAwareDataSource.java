@@ -69,6 +69,7 @@ public class TenantAwareDataSource {
                     && args != null && args.length == 1 && Boolean.FALSE.equals(args[0])) {
                 String tenantId = TenantContext.databaseTenantId();
                 if (tenantId != null) {
+                    TenantContext.recordTenantArming(false);
                     try {
                         String product = raw.getMetaData().getDatabaseProductName().toLowerCase();
                         if (product.contains("postgres")) {
@@ -78,6 +79,7 @@ public class TenantAwareDataSource {
                                 ps.execute();
                             }
                         }
+                        TenantContext.recordTenantArming(true);
                     } catch (Exception e) {
                         tenantArmingFailed[0] = true;
                         log.warn("Failed to arm RLS session variable; transaction initialization aborted");

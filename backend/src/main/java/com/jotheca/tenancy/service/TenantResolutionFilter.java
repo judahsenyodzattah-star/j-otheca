@@ -24,6 +24,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -92,8 +93,14 @@ public class TenantResolutionFilter extends OncePerRequestFilter {
         // The server-resolved library id arms only the membership lookup. It is not an authorized
         // TenantContext and cannot satisfy TenantContext.require() or TenantGuard checks.
         TenantContext.setProvisionalDatabaseTenant(library.getId());
-        Membership membership = memberships
-                .findByTenantIdAndUserIdAndStatus(library.getId(), user.id(), MembershipStatus.APPROVED)
+        TenantContext.beginMembershipDiagnostics(
+                TransactionSynchronizationManager.isActualTransactionActive());
+        var membershipResult = memberships
+                .findByTenantIdAndUserIdAndStatus(library.getId(), user.id(), MembershipStatus.APPROVED);
+        if (membershipResult.isEmpty()) {
+            log.debug("tenant_diagnostic {}", TenantContext.membershipDiagnosticSummary(false));
+        }
+        Membership membership = membershipResult
                 .orElseThrow(() -> ApiException.forbidden("NO_MEMBERSHIP",
                         "You are not an approved member of this library"));
 
