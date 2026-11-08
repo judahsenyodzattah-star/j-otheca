@@ -7,8 +7,6 @@ import com.jotheca.common.error.ApiException;
 import com.jotheca.common.tenant.TenantContext;
 import com.jotheca.common.web.AuthUser;
 import com.jotheca.membership.model.Membership;
-import com.jotheca.membership.model.MembershipStatus;
-import com.jotheca.membership.repo.MembershipRepository;
 import com.jotheca.tenancy.model.Library;
 import com.jotheca.tenancy.model.LibraryStatus;
 import com.jotheca.tenancy.repo.LibraryRepository;
@@ -24,6 +22,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -46,14 +45,15 @@ public class TenantResolutionFilter extends OncePerRequestFilter {
     private static final ObjectMapper JSON = JsonMapper.builder().findAndAddModules().build();
 
     private final LibraryRepository libraries;
-    private final MembershipRepository memberships;
+    private final TenantMembershipResolutionService membershipResolution;
 
     @PersistenceContext
     private EntityManager entityManager;
 
-    public TenantResolutionFilter(LibraryRepository libraries, MembershipRepository memberships) {
+    public TenantResolutionFilter(LibraryRepository libraries,
+                                  TenantMembershipResolutionService membershipResolution) {
         this.libraries = libraries;
-        this.memberships = memberships;
+        this.membershipResolution = membershipResolution;
     }
 
     @Override
@@ -88,8 +88,17 @@ public class TenantResolutionFilter extends OncePerRequestFilter {
         if (library.getStatus() != LibraryStatus.ACTIVE) {
             throw ApiException.forbidden("TENANT_INACTIVE", "This library is not active");
         }
-        Membership membership = memberships
-                .findByTenantIdAndUserIdAndStatus(library.getId(), user.id(), MembershipStatus.APPROVED)
+
+        // The server-resolved library id arms only the membership lookup. It is not an authorized
+        // TenantContext and cannot satisfy TenantContext.require() or TenantGuard checks.
+        TenantContext.setProvisionalDatabaseTenant(library.getId());
+        TenantContext.beginMembershipDiagnostics(
+                TransactionSynchronizationManager.isActualTransactionActive());
+        var membershipResult = membershipResolution.findApprovedMembership(library.getId(), user.id());
+        if (membershipResult.isEmpty()) {
+            log.debug("tenant_diagnostic {}", TenantContext.membershipDiagnosticSummary(false));
+        }
+        Membership membership = membershipResult
                 .orElseThrow(() -> ApiException.forbidden("NO_MEMBERSHIP",
                         "You are not an approved member of this library"));
 

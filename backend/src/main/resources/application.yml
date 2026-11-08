@@ -46,6 +46,8 @@ app:
     embedder: ${AI_EMBEDDER:local}            # local (offline, deterministic) | openai
     search:
       backend: ${AI_SEARCH_BACKEND:java}      # java (portable cosine) | pgvector (ANN, real PG)
+  discovery:
+    global-enabled: ${GLOBAL_DISCOVERY_ENABLED:false} # disabled until projection/security gates pass
 
 springdoc:
   swagger-ui:

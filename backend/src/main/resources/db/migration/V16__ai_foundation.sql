@@ -1,8 +1,10 @@
 -- V16 — AI foundation (Phase 10). Portable SQL (PG 16 + H2-PG-mode).
 --
 -- Embeddings are stored as pgvector text literals ([0.1,-0.2,...]) in a portable TEXT column.
--- On real Postgres, V17 (Java migration) creates the pgvector extension + an HNSW index over
--- (embedding::vector) and searches can switch to the native ANN backend; on H2/dev the Java
+-- On real Postgres, V17 (Java migration) installs the pgvector extension and retains the
+-- AI-table RLS policies, but does not create a generic HNSW index over (embedding::vector).
+-- Embeddings remain TEXT without a fixed dimension; a future vector index requires a deliberate
+-- fixed-dimension strategy. On H2/dev the Java
 -- cosine backend scores the same literals. Either way: every query is WHERE tenant_id = ? —
 -- vector search is tenant-isolation layer 9 of 9, and there is no cross-tenant query path at all.
 

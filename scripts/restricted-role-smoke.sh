@@ -51,7 +51,8 @@ PG_CONTAINER="${SMOKE_PG_CONTAINER:-jotheca-rls-smoke}"
 # postgres, so the old default would have silently attached the smoke test to the dev database.
 PG_PORT="${SMOKE_PG_PORT:-5543}"
 PG_DB="${SMOKE_PG_DB:-jotheca}"
-PG_OWNER="${SMOKE_PG_OWNER:-jotheca_migrate}"   # fresh-DB path: the migration role owns the schema
+PG_BOOTSTRAP="${SMOKE_PG_BOOTSTRAP:-postgres}"   # disposable-DB bootstrap superuser
+PG_OWNER="${SMOKE_PG_OWNER:-jotheca_migrate}"   # migration/database owner role
 # Outside the compose stack's published range (3001/5532/6479/8100/8101/8180/9100-9103) so the two
 # can be run side by side; also probed for collisions below.
 APP_PORT="${SMOKE_APP_PORT:-18080}"
@@ -139,6 +140,23 @@ psql_tx_as() { # psql_tx_as <role> <password> <tenantId|-> <sql>
   set -e
   if [ "$rc" -ne 0 ]; then echo "$SQL_ERROR"; else printf '%s' "$out" | tr -d '\r'; fi
 }
+psql_tx_as_rc() { # psql_tx_as_rc <role> <password> <tenantId> <sql>
+  local out rc; set +e
+  out="$(docker exec -e PGPASSWORD="$2" "$PG_CONTAINER" \
+        psql -U "$1" -d "$PG_DB" -A -t -q -v ON_ERROR_STOP=1 \
+        -c "BEGIN" -c "SELECT set_config('app.tenant_id','$3',true)" \
+        -c "$4" -c "COMMIT" 2>&1)"; rc=$?
+  set -e
+  PSQL_OUT="$out"; PSQL_RC="$rc"
+}
+# Fixture SQL must never be allowed to fail closed and then be ignored. Keep the diagnostic
+# deliberately generic so SQL text, credentials, and database details are not echoed.
+require_sql_success() { # require_sql_success <description> <result>
+  if [ "$2" = "$SQL_ERROR" ]; then
+    c_red "FATAL: $1 failed in PostgreSQL fixture setup"
+    exit 1
+  fi
+}
 # Runs a statement and reports the REAL exit status via PSQL_OUT / PSQL_RC.
 psql_as_rc() { # psql_as_rc <role> <password> <sql>
   local out rc; set +e
@@ -153,6 +171,23 @@ psql_as_rc() { # psql_as_rc <role> <password> <sql>
 expect_sql_failure() { # expect_sql_failure <role> <password> <sql>
   psql_as_rc "$1" "$2" "$3"
   if [ "$PSQL_RC" -ne 0 ]; then echo "OK"; else echo "LEAKED:${PSQL_OUT}"; fi
+}
+# Verify a cross-tenant mutation against a known row. A zero-row result is an expected RLS
+# denial for an invisible row; an RLS rejection is also expected. Any other SQL error or a
+# positive mutation count is a failure.
+expect_cross_tenant_mutation_denied() { # expect_cross_tenant_mutation_denied <role> <password> <tenant> <sql>
+  psql_tx_as_rc "$1" "$2" "$3" "$4"
+  if [ "$PSQL_RC" -eq 0 ]; then
+    if printf '%s' "$PSQL_OUT" | tr -d '\r' | grep -qE '(^|[[:space:]])0([[:space:]]|$)'; then
+      echo "OK_ZERO"
+    else
+      echo "UNEXPECTED_SUCCESS"
+    fi
+  elif printf '%s' "$PSQL_OUT" | grep -qi 'row-level security'; then
+    echo "OK_RLS"
+  else
+    echo "UNEXPECTED_SQL_ERROR"
+  fi
 }
 
 # ------------------------------------------------------------------------------------------- HTTP
@@ -200,6 +235,7 @@ for _p in "$PG_PORT" "$APP_PORT"; do
   fi
 done
 
+PG_BOOTSTRAP_PW="$(rand_hex 18)"
 PG_OWNER_PW="$(rand_hex 18)"
 MIGRATE_PW="$PG_OWNER_PW"
 APP_PW="$(rand_hex 18)"
@@ -211,20 +247,28 @@ JWT_SECRET="smoke-$(rand_hex 24)"
 section "1. Real PostgreSQL ($PG_IMAGE) — fresh-DB path, migration role owns the schema"
 docker rm -f "$PG_CONTAINER" >/dev/null 2>&1 || true
 docker run -d --rm --name "$PG_CONTAINER" \
-  -e POSTGRES_USER="$PG_OWNER" -e POSTGRES_PASSWORD="$PG_OWNER_PW" -e POSTGRES_DB="$PG_DB" \
+  -e POSTGRES_USER="$PG_BOOTSTRAP" -e POSTGRES_PASSWORD="$PG_BOOTSTRAP_PW" -e POSTGRES_DB="$PG_DB" \
   -p "127.0.0.1:${PG_PORT}:5432" "$PG_IMAGE" >/dev/null
 ready=""
 for _ in $(seq 1 60); do
-  if docker exec "$PG_CONTAINER" pg_isready -U "$PG_OWNER" -d "$PG_DB" >/dev/null 2>&1; then ready=1; break; fi
+  if docker exec "$PG_CONTAINER" pg_isready -U "$PG_BOOTSTRAP" -d "$PG_DB" >/dev/null 2>&1; then ready=1; break; fi
   sleep 2
 done
 if [ -z "$ready" ]; then c_red "Postgres did not become ready"; docker logs "$PG_CONTAINER" | tail -30; exit 1; fi
-pass "Postgres ready on 127.0.0.1:${PG_PORT}/${PG_DB} (owner=${PG_OWNER})"
+pass "Postgres ready on 127.0.0.1:${PG_PORT}/${PG_DB} (bootstrap=${PG_BOOTSTRAP})"
+
+section "1a. Bootstrap PostgreSQL extensions"
+docker exec -e PGPASSWORD="$PG_BOOTSTRAP_PW" "$PG_CONTAINER" \
+  psql -U "$PG_BOOTSTRAP" -d "$PG_DB" -v ON_ERROR_STOP=1 \
+  -c "CREATE EXTENSION IF NOT EXISTS vector" \
+  -c "CREATE EXTENSION IF NOT EXISTS pg_trgm" >/dev/null
+pass "vector and pg_trgm installed by bootstrap"
 
 # ------------------------------------------------------------------------- 2. provision the roles
 section "2. Provision least-privilege roles (infra/db/provision-roles.sh)"
 if JOTHECA_MIGRATE_PW="$MIGRATE_PW" JOTHECA_APP_PW="$APP_PW" JOTHECA_READALL_PW="$READALL_PW" \
-   PGHOST=127.0.0.1 PGPORT="$PG_PORT" PGUSER="$PG_OWNER" PGDATABASE="$PG_DB" \
+   JOTHECA_ASSIGN_OWNERSHIP=true PGPASSWORD="$PG_BOOTSTRAP_PW" \
+   PGHOST=127.0.0.1 PGPORT="$PG_PORT" PGUSER="$PG_BOOTSTRAP" PGDATABASE="$PG_DB" \
    bash "$ROOT/infra/db/provision-roles.sh" >"$WORKDIR/provision.log" 2>&1; then
   pass "provision-roles.sh completed"
 else
@@ -267,13 +311,18 @@ pass "using jar: ${JAR#$ROOT/}"
 section "5. Boot the app: restricted-role=true, separate Flyway credentials"
 APP_LOG="$WORKDIR/app.log"
 # `env -u SPRING_PROFILES_ACTIVE` guarantees the dev profile (H2) can never be inherited from the
-# caller's environment — the whole point is to run against real Postgres with the real roles.
+# caller's environment — the whole point is to run against real Postgres with the real roles. The
+# explicit test profile only activates the existing offline payment provider; it does not select H2.
+# `app.datasource.restricted-role` and `app.datasource.platform-read.*` are bound only by
+# application-staging.yml. The explicit command-line arguments below keep the plane split active
+# even though this smoke test intentionally runs without the staging profile.
 env -u SPRING_PROFILES_ACTIVE \
+SPRING_PROFILES_ACTIVE="test" \
 SPRING_DATASOURCE_URL="jdbc:postgresql://127.0.0.1:${PG_PORT}/${PG_DB}" \
 SPRING_DATASOURCE_USERNAME="jotheca_app" \
 SPRING_DATASOURCE_PASSWORD="$APP_PW" \
 SPRING_FLYWAY_URL="jdbc:postgresql://127.0.0.1:${PG_PORT}/${PG_DB}" \
-SPRING_FLYWAY_USERNAME="jotheca_migrate" \
+SPRING_FLYWAY_USER="jotheca_migrate" \
 SPRING_FLYWAY_PASSWORD="$MIGRATE_PW" \
 APP_RESTRICTED_ROLE="true" \
 APP_PLATFORM_READ_DB_USER="jotheca_readall" \
@@ -283,14 +332,10 @@ PUBLIC_BASE_URL="http://127.0.0.1:${APP_PORT}" \
 CORS_ORIGINS="http://127.0.0.1" \
 STORAGE_PROVIDER="memory" \
 RATE_LIMIT_BACKEND="memory" \
+APP_PAYMENTS_PROVIDER="mock" \
+MANAGEMENT_HEALTH_MAIL_ENABLED="false" \
+LOGGING_LEVEL_COM_JOTHECA_TENANCY_SERVICE_TENANTRESOLUTIONFILTER="DEBUG" \
 SERVER_PORT="$APP_PORT" \
-# C2: app.datasource.restricted-role and app.datasource.platform-read.* are bound ONLY in
-# application-staging.yml (grep backend/src/main/resources to confirm). No staging profile is active
-# here, so the environment variables above would be inert: PlatformPlaneConfig is @ConditionalOnProperty
-# on that flag, would never activate, and the app would boot on Spring Boot's single default
-# datasource with NO plane split - while every assertion still passed. They are therefore passed as
-# EXPLICIT command-line arguments, which bind from the Environment regardless of the active profile.
-# The same values are still exported above so the intent is visible in one place.
 nohup java -jar "$JAR" \
   --app.datasource.restricted-role=true \
   --app.datasource.platform-read.username=jotheca_readall \
@@ -300,14 +345,36 @@ APP_PID=$!
 c_ylw "app pid=$APP_PID"
 
 up=""
+HEALTH_STATUS="000"
+HEALTH_RESPONSE="$WORKDIR/health-response"
+: > "$HEALTH_RESPONSE"
 for _ in $(seq 1 90); do
-  [ "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${APP_PORT}/actuator/health" || true)" = "200" ] && { up=1; break; }
+  HEALTH_STATUS="$(curl -sS -o "$HEALTH_RESPONSE" -w '%{http_code}' "http://127.0.0.1:${APP_PORT}/actuator/health" || true)"
+  [ "$HEALTH_STATUS" = "200" ] && { up=1; break; }
   kill -0 "$APP_PID" 2>/dev/null || break
   sleep 2
 done
 if [ -z "$up" ]; then
   fail "app never became healthy"
-  c_red "---- last 60 log lines ----"; tail -60 "$APP_LOG"; exit 1
+  if kill -0 "$APP_PID" 2>/dev/null; then
+    c_red "application process state: running (pid=$APP_PID)"
+  else
+    c_red "application process state: exited"
+  fi
+  c_red "health HTTP status: $HEALTH_STATUS"
+  HEALTH_STATUSES="$(tr -d '\r\n ' < "$HEALTH_RESPONSE" | grep -oE '\"status\":\"(UP|DOWN|OUT_OF_SERVICE|UNKNOWN)\"' | sort -u | head -c 300 || true)"
+  HEALTH_COMPONENTS=""
+  for component in db mail diskSpace ping; do
+    if grep -q "\"$component\"" "$HEALTH_RESPONSE" 2>/dev/null; then
+      HEALTH_COMPONENTS="${HEALTH_COMPONENTS}${HEALTH_COMPONENTS:+,}$component"
+    fi
+  done
+  c_red "allowlisted health summary: statuses=${HEALTH_STATUSES:-none} components=${HEALTH_COMPONENTS:-none}"
+  c_red "---- first relevant application exception ----"
+  FIRST_EXCEPTION="$(grep -m1 -oE '(java|org|com)\.[A-Za-z0-9_.]+[A-Za-z0-9_$]+Exception' "$APP_LOG" 2>/dev/null || true)"
+  c_red "exception_class=${FIRST_EXCEPTION:-none found}"
+  c_red "application log content withheld to prevent credential or token disclosure"
+  exit 1
 fi
 assert_contains "GET /actuator/health is UP" "$(curl -s "http://127.0.0.1:${APP_PORT}/actuator/health" || true)" '"status":"UP"'
 # C2 regression guard: a healthy app proves NOTHING about the plane split. If restricted-role did not
@@ -334,6 +401,14 @@ assert_eq "29 tenant-isolation policies installed" "29" \
   "$(psql_owner "SELECT count(*) FROM pg_policies WHERE policyname LIKE '%tenant_isolation'")"
 assert_eq "29 tenant tables with FORCE RLS enabled" "29" \
   "$(psql_owner "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relrowsecurity AND c.relforcerowsecurity")"
+assert_eq "jotheca_app has no discovery schema USAGE before explicit grant design" "f" \
+  "$(psql_owner "SELECT has_schema_privilege('jotheca_app', 'discovery', 'USAGE')")"
+assert_eq "jotheca_readall has no discovery schema USAGE before explicit grant design" "f" \
+  "$(psql_owner "SELECT has_schema_privilege('jotheca_readall', 'discovery', 'USAGE')")"
+LEAK="$(expect_sql_failure jotheca_app "$APP_PW" "SELECT count(*) FROM discovery.editions")"
+assert_eq "jotheca_app cannot read discovery before explicit grant design" "OK" "$LEAK"
+LEAK="$(expect_sql_failure jotheca_readall "$READALL_PW" "SELECT count(*) FROM discovery.editions")"
+assert_eq "jotheca_readall cannot read discovery before explicit grant design" "OK" "$LEAK"
 assert_eq "both least-privilege pools are actually in use" "2" \
   "$(psql_owner "SELECT count(DISTINCT usename) FROM pg_stat_activity WHERE usename IN ('jotheca_app','jotheca_readall')")"
 
@@ -343,6 +418,7 @@ STAMP="$(date +%s)"
 ADMIN_EMAIL="smoke-admin-${STAMP}@example.test"
 MEMBER_EMAIL="smoke-member-${STAMP}@example.test"
 OUTSIDER_EMAIL="smoke-outsider-${STAMP}@example.test"
+TARGET_EMAIL="smoke-cross-tenant-target-${STAMP}@example.test"
 PW="SmokePassword123!"
 
 TOKEN=""; LIB_HEADER=""
@@ -352,9 +428,12 @@ http POST /api/v1/auth/register "{\"email\":\"$MEMBER_EMAIL\",\"password\":\"$PW
 assert_eq "register plain member -> 201" "201" "$HTTP_CODE"
 http POST /api/v1/auth/register "{\"email\":\"$OUTSIDER_EMAIL\",\"password\":\"$PW\",\"fullName\":\"Smoke Outsider\"}"
 assert_eq "register membership-less user -> 201" "201" "$HTTP_CODE"
+http POST /api/v1/auth/register "{\"email\":\"$TARGET_EMAIL\",\"password\":\"$PW\",\"fullName\":\"Smoke Cross-Tenant Target\"}"
+assert_eq "register cross-tenant target -> 201" "201" "$HTTP_CODE"
 
 # Promote exactly one account to SUPER_ADMIN (global users table — no RLS, applied as owner).
-psql_owner "UPDATE users SET global_role='SUPER_ADMIN' WHERE email='$ADMIN_EMAIL'" >/dev/null
+ADMIN_PROMOTION="$(psql_owner "UPDATE users SET global_role='SUPER_ADMIN' WHERE email='$ADMIN_EMAIL'")"
+require_sql_success "SUPER_ADMIN fixture promotion" "$ADMIN_PROMOTION"
 
 http POST /api/v1/auth/login "{\"email\":\"$ADMIN_EMAIL\",\"password\":\"$PW\"}"
 assert_eq "login as SUPER_ADMIN -> 200" "200" "$HTTP_CODE"
@@ -404,34 +483,56 @@ assert_contains "platform stats reports both tenants" "$HTTP_BODY" '"totalLibrar
 
 # ------------------------------------------- 9. platform WRITE confined to the armed library
 section "9. Platform WRITE plane (jotheca_app) — confined to the armed target library"
-# Give library A a subscription so changePlan has a row to move (inserted as owner, outside RLS).
-psql_owner "INSERT INTO library_subscriptions (id, tenant_id, plan_id, status, current_period_start, current_period_end, storage_addon_gb, created_at, updated_at)
-            SELECT gen_random_uuid()::text, '${LIB_A_ID}', p.id, 'ACTIVE', now(), now() + interval '30 days', 0, now(), now()
-            FROM subscription_plans p WHERE p.code='STARTER'
-              AND NOT EXISTS (SELECT 1 FROM library_subscriptions s WHERE s.tenant_id='${LIB_A_ID}')" >/dev/null
+# Give library A a subscription so changePlan has a row to move. The migration role is
+# NOBYPASSRLS, so this fixture is inserted with an explicit tenant-local context.
+SUBSCRIPTION_FIXTURE="$(psql_tx_as jotheca_migrate "$PG_OWNER_PW" "$LIB_A_ID" \
+  "INSERT INTO library_subscriptions (id, tenant_id, plan_id, status, current_period_start, current_period_end, storage_addon_gb, created_at, updated_at)
+   SELECT gen_random_uuid()::text, '${LIB_A_ID}', p.id, 'ACTIVE', now(), now() + interval '30 days', 0, now(), now()
+   FROM subscription_plans p WHERE p.code='STARTER'
+     AND NOT EXISTS (SELECT 1 FROM library_subscriptions s WHERE s.tenant_id='${LIB_A_ID}')")"
+require_sql_success "library A subscription fixture" "$SUBSCRIPTION_FIXTURE"
 assert_eq "library A has exactly one subscription" "1" \
-  "$(psql_owner "SELECT count(*) FROM library_subscriptions WHERE tenant_id='${LIB_A_ID}'")"
+  "$(psql_tx_as jotheca_migrate "$PG_OWNER_PW" "$LIB_A_ID" "SELECT count(*) FROM library_subscriptions WHERE tenant_id='${LIB_A_ID}'")"
 
 http POST "/api/v1/platform/libraries/${LIB_A_ID}/plan" '{"planCode":"PROFESSIONAL","reason":"smoke"}'
 assert_eq "plan change on library A -> 200" "200" "$HTTP_CODE"
 assert_contains "plan change reports the target tenant" "$HTTP_BODY" "$LIB_A_ID"
 assert_eq "plan change moved ONLY library A's subscription" "1" \
-  "$(psql_owner "SELECT count(*) FROM library_subscriptions WHERE tenant_id='${LIB_A_ID}' AND plan_id=(SELECT id FROM subscription_plans WHERE code='PROFESSIONAL')")"
+  "$(psql_tx_as jotheca_migrate "$PG_OWNER_PW" "$LIB_A_ID" "SELECT count(*) FROM library_subscriptions WHERE tenant_id='${LIB_A_ID}' AND plan_id=(SELECT id FROM subscription_plans WHERE code='PROFESSIONAL')")"
 assert_eq "library B has NO subscription row (write never leaked across tenants)" "0" \
-  "$(psql_owner "SELECT count(*) FROM library_subscriptions WHERE tenant_id='${LIB_B_ID}'")"
+  "$(psql_tx_as jotheca_migrate "$PG_OWNER_PW" "$LIB_B_ID" "SELECT count(*) FROM library_subscriptions WHERE tenant_id='${LIB_B_ID}'")"
 
 # --------------------------------------------------- 10. tenant plane: HTTP + DB boundaries
 section "10. Tenant plane (jotheca_app) — HTTP and PostgreSQL RLS boundaries"
-# One APPROVED LIBRARY_ADMIN membership in library A only (inserted as owner, outside RLS).
-psql_owner "INSERT INTO memberships (id, tenant_id, user_id, role, membership_type, status, membership_number, joined_at, created_at, updated_at)
-            SELECT gen_random_uuid()::text, '${LIB_A_ID}', u.id, 'LIBRARY_ADMIN', 'STAFF', 'APPROVED',
-                   'SMK-' || substr(md5(random()::text),1,8), now(), now(), now()
-            FROM users u WHERE u.email='${MEMBER_EMAIL}'
-              AND NOT EXISTS (SELECT 1 FROM memberships m WHERE m.tenant_id='${LIB_A_ID}' AND m.user_id=u.id)" >/dev/null
+# One APPROVED LIBRARY_ADMIN membership in library A plus a disposable library-B target.
+# Both fixtures are inserted under explicit tenant-local contexts; the migration role remains
+# subject to FORCE RLS.
+MEMBERSHIP_FIXTURE_A="$(psql_tx_as jotheca_migrate "$PG_OWNER_PW" "$LIB_A_ID" \
+  "INSERT INTO memberships (id, tenant_id, user_id, role, membership_type, status, membership_number, joined_at, created_at, updated_at)
+   SELECT gen_random_uuid()::text, '${LIB_A_ID}', u.id, 'LIBRARY_ADMIN', 'STAFF', 'APPROVED',
+          'SMK-' || substr(md5(random()::text),1,8), now(), now(), now()
+   FROM users u WHERE u.email='${MEMBER_EMAIL}'
+     AND NOT EXISTS (SELECT 1 FROM memberships m WHERE m.tenant_id='${LIB_A_ID}' AND m.user_id=u.id)")"
+require_sql_success "library A membership fixture" "$MEMBERSHIP_FIXTURE_A"
+MEMBERSHIP_FIXTURE_B="$(psql_tx_as jotheca_migrate "$PG_OWNER_PW" "$LIB_B_ID" \
+  "INSERT INTO memberships (id, tenant_id, user_id, role, membership_type, status, membership_number, joined_at, created_at, updated_at)
+   SELECT gen_random_uuid()::text, '${LIB_B_ID}', u.id, 'PATRON', 'PUBLIC_MEMBER', 'APPROVED',
+          'SMK-' || substr(md5(random()::text),1,8), now(), now(), now()
+   FROM users u WHERE u.email='${TARGET_EMAIL}'
+     AND NOT EXISTS (SELECT 1 FROM memberships m WHERE m.tenant_id='${LIB_B_ID}' AND m.user_id=u.id)")"
+require_sql_success "library B cross-tenant target fixture" "$MEMBERSHIP_FIXTURE_B"
 assert_eq "member has exactly one APPROVED membership (library A)" "1" \
-  "$(psql_owner "SELECT count(*) FROM memberships m JOIN users u ON u.id=m.user_id WHERE u.email='${MEMBER_EMAIL}' AND m.status='APPROVED'")"
+  "$(psql_tx_as jotheca_migrate "$PG_OWNER_PW" "$LIB_A_ID" "SELECT count(*) FROM memberships m JOIN users u ON u.id=m.user_id WHERE u.email='${MEMBER_EMAIL}' AND m.status='APPROVED'")"
 assert_eq "the membership-less user has NO membership anywhere" "0" \
-  "$(psql_owner "SELECT count(*) FROM memberships m JOIN users u ON u.id=m.user_id WHERE u.email='${OUTSIDER_EMAIL}'")"
+  "$(psql_as jotheca_readall "$READALL_PW" "SELECT count(*) FROM memberships m JOIN users u ON u.id=m.user_id WHERE u.email='${OUTSIDER_EMAIL}'")"
+TARGET_MEMBERSHIP_ID="$(psql_tx_as jotheca_migrate "$PG_OWNER_PW" "$LIB_B_ID" "SELECT m.id FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.tenant_id='${LIB_B_ID}' AND u.email='${TARGET_EMAIL}'")"
+require_sql_success "library B cross-tenant target lookup" "$TARGET_MEMBERSHIP_ID"
+if [ -z "$TARGET_MEMBERSHIP_ID" ]; then
+  c_red "FATAL: library B cross-tenant target fixture is absent"
+  exit 1
+fi
+assert_eq "known library-B row exists before cross-tenant mutations" "1" \
+  "$(psql_tx_as jotheca_migrate "$PG_OWNER_PW" "$LIB_B_ID" "SELECT count(*) FROM memberships WHERE id='${TARGET_MEMBERSHIP_ID}' AND tenant_id='${LIB_B_ID}'")"
 
 TOKEN="$MEMBER_TOKEN"; LIB_HEADER="$LIB_A_UID"
 http GET /api/v1/tenant/members
@@ -460,6 +561,24 @@ assert_eq "jotheca_app armed to A sees exactly A's members" "1" \
 assert_eq "jotheca_app armed to A sees ZERO of B's rows" "0" \
   "$(psql_tx_as jotheca_app "$APP_PW" "$LIB_A_ID" "SELECT count(*) FROM memberships WHERE tenant_id='${LIB_B_ID}'")"
 
+# Positive control: jotheca_app may update a disposable, non-security-sensitive field on its own
+# tenant's existing row. Identity, tenant ownership, role, and approval status remain unchanged.
+ORIGINAL_MEMBERSHIP_NUMBER="$(psql_tx_as jotheca_migrate "$PG_OWNER_PW" "$LIB_A_ID" "SELECT membership_number FROM memberships WHERE tenant_id='${LIB_A_ID}' AND user_id=(SELECT id FROM users WHERE email='${MEMBER_EMAIL}')")"
+require_sql_success "library A membership-number lookup" "$ORIGINAL_MEMBERSHIP_NUMBER"
+if [ -z "$ORIGINAL_MEMBERSHIP_NUMBER" ]; then
+  c_red "FATAL: library A membership-number fixture is absent"
+  exit 1
+fi
+POSITIVE_CONTROL_NUMBER="${ORIGINAL_MEMBERSHIP_NUMBER}-CTRL"
+POSITIVE_UPDATE="$(psql_tx_as jotheca_app "$APP_PW" "$LIB_A_ID" \
+  "WITH changed AS (UPDATE memberships SET membership_number='${POSITIVE_CONTROL_NUMBER}' WHERE id=(SELECT m.id FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.tenant_id='${LIB_A_ID}' AND u.email='${MEMBER_EMAIL}') RETURNING 1) SELECT count(*) FROM changed")"
+assert_eq "jotheca_app can update one own-tenant disposable field" "1" "$POSITIVE_UPDATE"
+assert_eq "authorized update is visible to jotheca_app" "$POSITIVE_CONTROL_NUMBER" \
+  "$(psql_tx_as jotheca_app "$APP_PW" "$LIB_A_ID" "SELECT membership_number FROM memberships WHERE tenant_id='${LIB_A_ID}' AND user_id=(SELECT id FROM users WHERE email='${MEMBER_EMAIL}')")"
+RESTORE_CONTROL="$(psql_tx_as jotheca_app "$APP_PW" "$LIB_A_ID" \
+  "WITH changed AS (UPDATE memberships SET membership_number='${ORIGINAL_MEMBERSHIP_NUMBER}' WHERE id=(SELECT m.id FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.tenant_id='${LIB_A_ID}' AND u.email='${MEMBER_EMAIL}') RETURNING 1) SELECT count(*) FROM changed")"
+assert_eq "jotheca_app restores the disposable own-tenant field" "1" "$RESTORE_CONTROL"
+
 # NB: the planted row is for a user who has NO membership anywhere, so a unique-constraint
 # violation cannot masquerade as an RLS block — only WITH CHECK can refuse this insert.
 LEAK="$(expect_sql_failure jotheca_app "$APP_PW" \
@@ -469,21 +588,24 @@ LEAK="$(expect_sql_failure jotheca_app "$APP_PW" \
    FROM users u WHERE u.email='${OUTSIDER_EMAIL}'; COMMIT")"
 assert_eq "jotheca_app CANNOT plant a membership under another tenant (WITH CHECK)" "OK" "$LEAK"
 assert_eq "nothing was written by the blocked insert" "0" \
-  "$(psql_owner "SELECT count(*) FROM memberships WHERE tenant_id='${LIB_B_ID}'")"
+  "$(psql_tx_as jotheca_migrate "$PG_OWNER_PW" "$LIB_B_ID" "SELECT count(*) FROM memberships WHERE tenant_id='${LIB_B_ID}' AND user_id=(SELECT id FROM users WHERE email='${OUTSIDER_EMAIL}')")"
 
-LEAK="$(expect_sql_failure jotheca_app "$APP_PW" \
-  "BEGIN; SELECT set_config('app.tenant_id','${LIB_A_ID}',true);
-   UPDATE memberships SET tenant_id='${LIB_B_ID}' WHERE tenant_id='${LIB_A_ID}'; COMMIT")"
-assert_eq "jotheca_app CANNOT reassign an own row to another tenant" "OK" "$LEAK"
-
-LEAK="$(expect_sql_failure jotheca_app "$APP_PW" \
-  "BEGIN; SELECT set_config('app.tenant_id','${LIB_A_ID}',true);
-   DELETE FROM memberships WHERE tenant_id='${LIB_B_ID}'; COMMIT")"
-assert_eq "jotheca_app CANNOT delete another tenant's rows" "OK" "$LEAK"
+assert_eq "known library-A row exists before cross-tenant update" "1" \
+  "$(psql_tx_as jotheca_migrate "$PG_OWNER_PW" "$LIB_A_ID" "SELECT count(*) FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.tenant_id='${LIB_A_ID}' AND u.email='${MEMBER_EMAIL}'")"
+LEAK="$(expect_cross_tenant_mutation_denied jotheca_app "$APP_PW" "$LIB_A_ID" \
+  "WITH changed AS (UPDATE memberships SET tenant_id='${LIB_B_ID}' WHERE tenant_id='${LIB_A_ID}' AND user_id=(SELECT id FROM users WHERE email='${MEMBER_EMAIL}') RETURNING 1) SELECT count(*) FROM changed")"
+case "$LEAK" in OK_ZERO|OK_RLS) pass "jotheca_app CANNOT reassign an own row to another tenant ($LEAK)" ;; *) fail "jotheca_app cross-tenant update was not denied ($LEAK)" ;; esac
+assert_eq "library-A row remains assigned to library A after blocked update" "1" \
+  "$(psql_tx_as jotheca_migrate "$PG_OWNER_PW" "$LIB_A_ID" "SELECT count(*) FROM memberships WHERE id=(SELECT m.id FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.tenant_id='${LIB_A_ID}' AND u.email='${MEMBER_EMAIL}') AND tenant_id='${LIB_A_ID}'")"
+LEAK="$(expect_cross_tenant_mutation_denied jotheca_app "$APP_PW" "$LIB_A_ID" \
+  "WITH deleted AS (DELETE FROM memberships WHERE id='${TARGET_MEMBERSHIP_ID}' RETURNING 1) SELECT count(*) FROM deleted")"
+case "$LEAK" in OK_ZERO|OK_RLS) pass "jotheca_app CANNOT delete another tenant's rows ($LEAK)" ;; *) fail "jotheca_app cross-tenant delete was not denied ($LEAK)" ;; esac
+assert_eq "cross-tenant target row remains unchanged" "1" \
+  "$(psql_tx_as jotheca_migrate "$PG_OWNER_PW" "$LIB_B_ID" "SELECT count(*) FROM memberships WHERE id='${TARGET_MEMBERSHIP_ID}' AND tenant_id='${LIB_B_ID}'")"
 
 # --- DB layer: the read-only platform role
 section "12. Platform READ role is genuinely read-only"
-assert_eq "jotheca_readall reads ACROSS tenants (BYPASSRLS)" "1" \
+assert_eq "jotheca_readall reads ACROSS tenants (BYPASSRLS)" "2" \
   "$(psql_tx_as jotheca_readall "$READALL_PW" - "SELECT count(*) FROM memberships")"
 LEAK="$(expect_sql_failure jotheca_readall "$READALL_PW" \
   "INSERT INTO memberships (id, tenant_id, user_id, role, membership_type, status, joined_at, created_at, updated_at)
