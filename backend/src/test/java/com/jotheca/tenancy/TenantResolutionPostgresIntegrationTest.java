@@ -22,6 +22,7 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -36,6 +37,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @AutoConfigureMockMvc
 @Import(TenantResolutionPostgresIntegrationTest.OwnerFixtureConfiguration.class)
 @ActiveProfiles("test")
+@TestPropertySource(properties =
+        "logging.level.com.jotheca.tenancy.service.TenantResolutionFilter=DEBUG")
 @Testcontainers(disabledWithoutDocker = true)
 class TenantResolutionPostgresIntegrationTest {
 

@@ -51,4 +51,25 @@ class TenantContextProvisionalScopeTest {
 
         assertThat(TenantContext.get()).isNull();
     }
+
+    @Test
+    void failedMembershipDiagnosticSummaryContainsOnlyAllowlistedStates() {
+        TenantContext.setProvisionalDatabaseTenant("library-a");
+        TenantContext.beginMembershipDiagnostics(true);
+
+        assertThat(TenantContext.membershipDiagnosticSummary(false))
+                .isEqualTo("provisional_scope_present=true transaction_active=true "
+                        + "tenant_arming_attempted=false tenant_arming_succeeded=false membership_found=false");
+    }
+
+    @Test
+    void diagnosticStateIsClearedAfterRequestCleanup() {
+        TenantContext.setProvisionalDatabaseTenant("library-a");
+        TenantContext.beginMembershipDiagnostics(true);
+        TenantContext.clear();
+
+        assertThat(TenantContext.membershipDiagnosticSummary(false))
+                .isEqualTo("provisional_scope_present=false transaction_active=false "
+                        + "tenant_arming_attempted=false tenant_arming_succeeded=false membership_found=false");
+    }
 }
