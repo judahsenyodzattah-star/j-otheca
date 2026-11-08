@@ -140,6 +140,23 @@ psql_tx_as() { # psql_tx_as <role> <password> <tenantId|-> <sql>
   set -e
   if [ "$rc" -ne 0 ]; then echo "$SQL_ERROR"; else printf '%s' "$out" | tr -d '\r'; fi
 }
+psql_tx_as_rc() { # psql_tx_as_rc <role> <password> <tenantId> <sql>
+  local out rc; set +e
+  out="$(docker exec -e PGPASSWORD="$2" "$PG_CONTAINER" \
+        psql -U "$1" -d "$PG_DB" -A -t -q -v ON_ERROR_STOP=1 \
+        -c "BEGIN" -c "SELECT set_config('app.tenant_id','$3',true)" \
+        -c "$4" -c "COMMIT" 2>&1)"; rc=$?
+  set -e
+  PSQL_OUT="$out"; PSQL_RC="$rc"
+}
+# Fixture SQL must never be allowed to fail closed and then be ignored. Keep the diagnostic
+# deliberately generic so SQL text, credentials, and database details are not echoed.
+require_sql_success() { # require_sql_success <description> <result>
+  if [ "$2" = "$SQL_ERROR" ]; then
+    c_red "FATAL: $1 failed in PostgreSQL fixture setup"
+    exit 1
+  fi
+}
 # Runs a statement and reports the REAL exit status via PSQL_OUT / PSQL_RC.
 psql_as_rc() { # psql_as_rc <role> <password> <sql>
   local out rc; set +e
@@ -154,6 +171,23 @@ psql_as_rc() { # psql_as_rc <role> <password> <sql>
 expect_sql_failure() { # expect_sql_failure <role> <password> <sql>
   psql_as_rc "$1" "$2" "$3"
   if [ "$PSQL_RC" -ne 0 ]; then echo "OK"; else echo "LEAKED:${PSQL_OUT}"; fi
+}
+# Verify a cross-tenant mutation against a known row. A zero-row result is an expected RLS
+# denial for an invisible row; an RLS rejection is also expected. Any other SQL error or a
+# positive mutation count is a failure.
+expect_cross_tenant_mutation_denied() { # expect_cross_tenant_mutation_denied <role> <password> <tenant> <sql>
+  psql_tx_as_rc "$1" "$2" "$3" "$4"
+  if [ "$PSQL_RC" -eq 0 ]; then
+    if printf '%s' "$PSQL_OUT" | tr -d '\r' | grep -qE '(^|[[:space:]])0([[:space:]]|$)'; then
+      echo "OK_ZERO"
+    else
+      echo "UNEXPECTED_SUCCESS"
+    fi
+  elif printf '%s' "$PSQL_OUT" | grep -qi 'row-level security'; then
+    echo "OK_RLS"
+  else
+    echo "UNEXPECTED_SQL_ERROR"
+  fi
 }
 
 # ------------------------------------------------------------------------------------------- HTTP
@@ -383,6 +417,7 @@ STAMP="$(date +%s)"
 ADMIN_EMAIL="smoke-admin-${STAMP}@example.test"
 MEMBER_EMAIL="smoke-member-${STAMP}@example.test"
 OUTSIDER_EMAIL="smoke-outsider-${STAMP}@example.test"
+TARGET_EMAIL="smoke-cross-tenant-target-${STAMP}@example.test"
 PW="SmokePassword123!"
 
 TOKEN=""; LIB_HEADER=""
@@ -392,9 +427,12 @@ http POST /api/v1/auth/register "{\"email\":\"$MEMBER_EMAIL\",\"password\":\"$PW
 assert_eq "register plain member -> 201" "201" "$HTTP_CODE"
 http POST /api/v1/auth/register "{\"email\":\"$OUTSIDER_EMAIL\",\"password\":\"$PW\",\"fullName\":\"Smoke Outsider\"}"
 assert_eq "register membership-less user -> 201" "201" "$HTTP_CODE"
+http POST /api/v1/auth/register "{\"email\":\"$TARGET_EMAIL\",\"password\":\"$PW\",\"fullName\":\"Smoke Cross-Tenant Target\"}"
+assert_eq "register cross-tenant target -> 201" "201" "$HTTP_CODE"
 
 # Promote exactly one account to SUPER_ADMIN (global users table — no RLS, applied as owner).
-psql_owner "UPDATE users SET global_role='SUPER_ADMIN' WHERE email='$ADMIN_EMAIL'" >/dev/null
+ADMIN_PROMOTION="$(psql_owner "UPDATE users SET global_role='SUPER_ADMIN' WHERE email='$ADMIN_EMAIL'")"
+require_sql_success "SUPER_ADMIN fixture promotion" "$ADMIN_PROMOTION"
 
 http POST /api/v1/auth/login "{\"email\":\"$ADMIN_EMAIL\",\"password\":\"$PW\"}"
 assert_eq "login as SUPER_ADMIN -> 200" "200" "$HTTP_CODE"
@@ -444,34 +482,56 @@ assert_contains "platform stats reports both tenants" "$HTTP_BODY" '"totalLibrar
 
 # ------------------------------------------- 9. platform WRITE confined to the armed library
 section "9. Platform WRITE plane (jotheca_app) — confined to the armed target library"
-# Give library A a subscription so changePlan has a row to move (inserted as owner, outside RLS).
-psql_owner "INSERT INTO library_subscriptions (id, tenant_id, plan_id, status, current_period_start, current_period_end, storage_addon_gb, created_at, updated_at)
-            SELECT gen_random_uuid()::text, '${LIB_A_ID}', p.id, 'ACTIVE', now(), now() + interval '30 days', 0, now(), now()
-            FROM subscription_plans p WHERE p.code='STARTER'
-              AND NOT EXISTS (SELECT 1 FROM library_subscriptions s WHERE s.tenant_id='${LIB_A_ID}')" >/dev/null
+# Give library A a subscription so changePlan has a row to move. The migration role is
+# NOBYPASSRLS, so this fixture is inserted with an explicit tenant-local context.
+SUBSCRIPTION_FIXTURE="$(psql_tx_as jotheca_migrate "$PG_OWNER_PW" "$LIB_A_ID" \
+  "INSERT INTO library_subscriptions (id, tenant_id, plan_id, status, current_period_start, current_period_end, storage_addon_gb, created_at, updated_at)
+   SELECT gen_random_uuid()::text, '${LIB_A_ID}', p.id, 'ACTIVE', now(), now() + interval '30 days', 0, now(), now()
+   FROM subscription_plans p WHERE p.code='STARTER'
+     AND NOT EXISTS (SELECT 1 FROM library_subscriptions s WHERE s.tenant_id='${LIB_A_ID}')")"
+require_sql_success "library A subscription fixture" "$SUBSCRIPTION_FIXTURE"
 assert_eq "library A has exactly one subscription" "1" \
-  "$(psql_owner "SELECT count(*) FROM library_subscriptions WHERE tenant_id='${LIB_A_ID}'")"
+  "$(psql_tx_as jotheca_migrate "$PG_OWNER_PW" "$LIB_A_ID" "SELECT count(*) FROM library_subscriptions WHERE tenant_id='${LIB_A_ID}'")"
 
 http POST "/api/v1/platform/libraries/${LIB_A_ID}/plan" '{"planCode":"PROFESSIONAL","reason":"smoke"}'
 assert_eq "plan change on library A -> 200" "200" "$HTTP_CODE"
 assert_contains "plan change reports the target tenant" "$HTTP_BODY" "$LIB_A_ID"
 assert_eq "plan change moved ONLY library A's subscription" "1" \
-  "$(psql_owner "SELECT count(*) FROM library_subscriptions WHERE tenant_id='${LIB_A_ID}' AND plan_id=(SELECT id FROM subscription_plans WHERE code='PROFESSIONAL')")"
+  "$(psql_tx_as jotheca_migrate "$PG_OWNER_PW" "$LIB_A_ID" "SELECT count(*) FROM library_subscriptions WHERE tenant_id='${LIB_A_ID}' AND plan_id=(SELECT id FROM subscription_plans WHERE code='PROFESSIONAL')")"
 assert_eq "library B has NO subscription row (write never leaked across tenants)" "0" \
-  "$(psql_owner "SELECT count(*) FROM library_subscriptions WHERE tenant_id='${LIB_B_ID}'")"
+  "$(psql_tx_as jotheca_migrate "$PG_OWNER_PW" "$LIB_B_ID" "SELECT count(*) FROM library_subscriptions WHERE tenant_id='${LIB_B_ID}'")"
 
 # --------------------------------------------------- 10. tenant plane: HTTP + DB boundaries
 section "10. Tenant plane (jotheca_app) — HTTP and PostgreSQL RLS boundaries"
-# One APPROVED LIBRARY_ADMIN membership in library A only (inserted as owner, outside RLS).
-psql_owner "INSERT INTO memberships (id, tenant_id, user_id, role, membership_type, status, membership_number, joined_at, created_at, updated_at)
-            SELECT gen_random_uuid()::text, '${LIB_A_ID}', u.id, 'LIBRARY_ADMIN', 'STAFF', 'APPROVED',
-                   'SMK-' || substr(md5(random()::text),1,8), now(), now(), now()
-            FROM users u WHERE u.email='${MEMBER_EMAIL}'
-              AND NOT EXISTS (SELECT 1 FROM memberships m WHERE m.tenant_id='${LIB_A_ID}' AND m.user_id=u.id)" >/dev/null
+# One APPROVED LIBRARY_ADMIN membership in library A plus a disposable library-B target.
+# Both fixtures are inserted under explicit tenant-local contexts; the migration role remains
+# subject to FORCE RLS.
+MEMBERSHIP_FIXTURE_A="$(psql_tx_as jotheca_migrate "$PG_OWNER_PW" "$LIB_A_ID" \
+  "INSERT INTO memberships (id, tenant_id, user_id, role, membership_type, status, membership_number, joined_at, created_at, updated_at)
+   SELECT gen_random_uuid()::text, '${LIB_A_ID}', u.id, 'LIBRARY_ADMIN', 'STAFF', 'APPROVED',
+          'SMK-' || substr(md5(random()::text),1,8), now(), now(), now()
+   FROM users u WHERE u.email='${MEMBER_EMAIL}'
+     AND NOT EXISTS (SELECT 1 FROM memberships m WHERE m.tenant_id='${LIB_A_ID}' AND m.user_id=u.id)")"
+require_sql_success "library A membership fixture" "$MEMBERSHIP_FIXTURE_A"
+MEMBERSHIP_FIXTURE_B="$(psql_tx_as jotheca_migrate "$PG_OWNER_PW" "$LIB_B_ID" \
+  "INSERT INTO memberships (id, tenant_id, user_id, role, membership_type, status, membership_number, joined_at, created_at, updated_at)
+   SELECT gen_random_uuid()::text, '${LIB_B_ID}', u.id, 'PATRON', 'PUBLIC_MEMBER', 'APPROVED',
+          'SMK-' || substr(md5(random()::text),1,8), now(), now(), now()
+   FROM users u WHERE u.email='${TARGET_EMAIL}'
+     AND NOT EXISTS (SELECT 1 FROM memberships m WHERE m.tenant_id='${LIB_B_ID}' AND m.user_id=u.id)")"
+require_sql_success "library B cross-tenant target fixture" "$MEMBERSHIP_FIXTURE_B"
 assert_eq "member has exactly one APPROVED membership (library A)" "1" \
-  "$(psql_owner "SELECT count(*) FROM memberships m JOIN users u ON u.id=m.user_id WHERE u.email='${MEMBER_EMAIL}' AND m.status='APPROVED'")"
+  "$(psql_tx_as jotheca_migrate "$PG_OWNER_PW" "$LIB_A_ID" "SELECT count(*) FROM memberships m JOIN users u ON u.id=m.user_id WHERE u.email='${MEMBER_EMAIL}' AND m.status='APPROVED'")"
 assert_eq "the membership-less user has NO membership anywhere" "0" \
-  "$(psql_owner "SELECT count(*) FROM memberships m JOIN users u ON u.id=m.user_id WHERE u.email='${OUTSIDER_EMAIL}'")"
+  "$(psql_as jotheca_readall "$READALL_PW" "SELECT count(*) FROM memberships m JOIN users u ON u.id=m.user_id WHERE u.email='${OUTSIDER_EMAIL}'")"
+TARGET_MEMBERSHIP_ID="$(psql_tx_as jotheca_migrate "$PG_OWNER_PW" "$LIB_B_ID" "SELECT m.id FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.tenant_id='${LIB_B_ID}' AND u.email='${TARGET_EMAIL}'")"
+require_sql_success "library B cross-tenant target lookup" "$TARGET_MEMBERSHIP_ID"
+if [ -z "$TARGET_MEMBERSHIP_ID" ]; then
+  c_red "FATAL: library B cross-tenant target fixture is absent"
+  exit 1
+fi
+assert_eq "known library-B row exists before cross-tenant mutations" "1" \
+  "$(psql_tx_as jotheca_migrate "$PG_OWNER_PW" "$LIB_B_ID" "SELECT count(*) FROM memberships WHERE id='${TARGET_MEMBERSHIP_ID}' AND tenant_id='${LIB_B_ID}'")"
 
 TOKEN="$MEMBER_TOKEN"; LIB_HEADER="$LIB_A_UID"
 http GET /api/v1/tenant/members
@@ -500,6 +560,24 @@ assert_eq "jotheca_app armed to A sees exactly A's members" "1" \
 assert_eq "jotheca_app armed to A sees ZERO of B's rows" "0" \
   "$(psql_tx_as jotheca_app "$APP_PW" "$LIB_A_ID" "SELECT count(*) FROM memberships WHERE tenant_id='${LIB_B_ID}'")"
 
+# Positive control: jotheca_app may update a disposable, non-security-sensitive field on its own
+# tenant's existing row. Identity, tenant ownership, role, and approval status remain unchanged.
+ORIGINAL_MEMBERSHIP_NUMBER="$(psql_tx_as jotheca_migrate "$PG_OWNER_PW" "$LIB_A_ID" "SELECT membership_number FROM memberships WHERE tenant_id='${LIB_A_ID}' AND user_id=(SELECT id FROM users WHERE email='${MEMBER_EMAIL}')")"
+require_sql_success "library A membership-number lookup" "$ORIGINAL_MEMBERSHIP_NUMBER"
+if [ -z "$ORIGINAL_MEMBERSHIP_NUMBER" ]; then
+  c_red "FATAL: library A membership-number fixture is absent"
+  exit 1
+fi
+POSITIVE_CONTROL_NUMBER="${ORIGINAL_MEMBERSHIP_NUMBER}-CTRL"
+POSITIVE_UPDATE="$(psql_tx_as jotheca_app "$APP_PW" "$LIB_A_ID" \
+  "WITH changed AS (UPDATE memberships SET membership_number='${POSITIVE_CONTROL_NUMBER}' WHERE id=(SELECT m.id FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.tenant_id='${LIB_A_ID}' AND u.email='${MEMBER_EMAIL}') RETURNING 1) SELECT count(*) FROM changed")"
+assert_eq "jotheca_app can update one own-tenant disposable field" "1" "$POSITIVE_UPDATE"
+assert_eq "authorized update is visible to jotheca_app" "$POSITIVE_CONTROL_NUMBER" \
+  "$(psql_tx_as jotheca_app "$APP_PW" "$LIB_A_ID" "SELECT membership_number FROM memberships WHERE tenant_id='${LIB_A_ID}' AND user_id=(SELECT id FROM users WHERE email='${MEMBER_EMAIL}')")"
+RESTORE_CONTROL="$(psql_tx_as jotheca_app "$APP_PW" "$LIB_A_ID" \
+  "WITH changed AS (UPDATE memberships SET membership_number='${ORIGINAL_MEMBERSHIP_NUMBER}' WHERE id=(SELECT m.id FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.tenant_id='${LIB_A_ID}' AND u.email='${MEMBER_EMAIL}') RETURNING 1) SELECT count(*) FROM changed")"
+assert_eq "jotheca_app restores the disposable own-tenant field" "1" "$RESTORE_CONTROL"
+
 # NB: the planted row is for a user who has NO membership anywhere, so a unique-constraint
 # violation cannot masquerade as an RLS block — only WITH CHECK can refuse this insert.
 LEAK="$(expect_sql_failure jotheca_app "$APP_PW" \
@@ -509,21 +587,24 @@ LEAK="$(expect_sql_failure jotheca_app "$APP_PW" \
    FROM users u WHERE u.email='${OUTSIDER_EMAIL}'; COMMIT")"
 assert_eq "jotheca_app CANNOT plant a membership under another tenant (WITH CHECK)" "OK" "$LEAK"
 assert_eq "nothing was written by the blocked insert" "0" \
-  "$(psql_owner "SELECT count(*) FROM memberships WHERE tenant_id='${LIB_B_ID}'")"
+  "$(psql_tx_as jotheca_migrate "$PG_OWNER_PW" "$LIB_B_ID" "SELECT count(*) FROM memberships WHERE tenant_id='${LIB_B_ID}' AND user_id=(SELECT id FROM users WHERE email='${OUTSIDER_EMAIL}')")"
 
-LEAK="$(expect_sql_failure jotheca_app "$APP_PW" \
-  "BEGIN; SELECT set_config('app.tenant_id','${LIB_A_ID}',true);
-   UPDATE memberships SET tenant_id='${LIB_B_ID}' WHERE tenant_id='${LIB_A_ID}'; COMMIT")"
-assert_eq "jotheca_app CANNOT reassign an own row to another tenant" "OK" "$LEAK"
-
-LEAK="$(expect_sql_failure jotheca_app "$APP_PW" \
-  "BEGIN; SELECT set_config('app.tenant_id','${LIB_A_ID}',true);
-   DELETE FROM memberships WHERE tenant_id='${LIB_B_ID}'; COMMIT")"
-assert_eq "jotheca_app CANNOT delete another tenant's rows" "OK" "$LEAK"
+assert_eq "known library-A row exists before cross-tenant update" "1" \
+  "$(psql_tx_as jotheca_migrate "$PG_OWNER_PW" "$LIB_A_ID" "SELECT count(*) FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.tenant_id='${LIB_A_ID}' AND u.email='${MEMBER_EMAIL}'")"
+LEAK="$(expect_cross_tenant_mutation_denied jotheca_app "$APP_PW" "$LIB_A_ID" \
+  "WITH changed AS (UPDATE memberships SET tenant_id='${LIB_B_ID}' WHERE tenant_id='${LIB_A_ID}' AND user_id=(SELECT id FROM users WHERE email='${MEMBER_EMAIL}') RETURNING 1) SELECT count(*) FROM changed")"
+case "$LEAK" in OK_ZERO|OK_RLS) pass "jotheca_app CANNOT reassign an own row to another tenant ($LEAK)" ;; *) fail "jotheca_app cross-tenant update was not denied ($LEAK)" ;; esac
+assert_eq "library-A row remains assigned to library A after blocked update" "1" \
+  "$(psql_tx_as jotheca_migrate "$PG_OWNER_PW" "$LIB_A_ID" "SELECT count(*) FROM memberships WHERE id=(SELECT m.id FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.tenant_id='${LIB_A_ID}' AND u.email='${MEMBER_EMAIL}') AND tenant_id='${LIB_A_ID}'")"
+LEAK="$(expect_cross_tenant_mutation_denied jotheca_app "$APP_PW" "$LIB_A_ID" \
+  "WITH deleted AS (DELETE FROM memberships WHERE id='${TARGET_MEMBERSHIP_ID}' RETURNING 1) SELECT count(*) FROM deleted")"
+case "$LEAK" in OK_ZERO|OK_RLS) pass "jotheca_app CANNOT delete another tenant's rows ($LEAK)" ;; *) fail "jotheca_app cross-tenant delete was not denied ($LEAK)" ;; esac
+assert_eq "cross-tenant target row remains unchanged" "1" \
+  "$(psql_tx_as jotheca_migrate "$PG_OWNER_PW" "$LIB_B_ID" "SELECT count(*) FROM memberships WHERE id='${TARGET_MEMBERSHIP_ID}' AND tenant_id='${LIB_B_ID}'")"
 
 # --- DB layer: the read-only platform role
 section "12. Platform READ role is genuinely read-only"
-assert_eq "jotheca_readall reads ACROSS tenants (BYPASSRLS)" "1" \
+assert_eq "jotheca_readall reads ACROSS tenants (BYPASSRLS)" "2" \
   "$(psql_tx_as jotheca_readall "$READALL_PW" - "SELECT count(*) FROM memberships")"
 LEAK="$(expect_sql_failure jotheca_readall "$READALL_PW" \
   "INSERT INTO memberships (id, tenant_id, user_id, role, membership_type, status, joined_at, created_at, updated_at)
