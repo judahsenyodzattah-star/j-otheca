@@ -7,8 +7,6 @@ import com.jotheca.common.error.ApiException;
 import com.jotheca.common.tenant.TenantContext;
 import com.jotheca.common.web.AuthUser;
 import com.jotheca.membership.model.Membership;
-import com.jotheca.membership.model.MembershipStatus;
-import com.jotheca.membership.repo.MembershipRepository;
 import com.jotheca.tenancy.model.Library;
 import com.jotheca.tenancy.model.LibraryStatus;
 import com.jotheca.tenancy.repo.LibraryRepository;
@@ -47,14 +45,15 @@ public class TenantResolutionFilter extends OncePerRequestFilter {
     private static final ObjectMapper JSON = JsonMapper.builder().findAndAddModules().build();
 
     private final LibraryRepository libraries;
-    private final MembershipRepository memberships;
+    private final TenantMembershipResolutionService membershipResolution;
 
     @PersistenceContext
     private EntityManager entityManager;
 
-    public TenantResolutionFilter(LibraryRepository libraries, MembershipRepository memberships) {
+    public TenantResolutionFilter(LibraryRepository libraries,
+                                  TenantMembershipResolutionService membershipResolution) {
         this.libraries = libraries;
-        this.memberships = memberships;
+        this.membershipResolution = membershipResolution;
     }
 
     @Override
@@ -95,8 +94,7 @@ public class TenantResolutionFilter extends OncePerRequestFilter {
         TenantContext.setProvisionalDatabaseTenant(library.getId());
         TenantContext.beginMembershipDiagnostics(
                 TransactionSynchronizationManager.isActualTransactionActive());
-        var membershipResult = memberships
-                .findByTenantIdAndUserIdAndStatus(library.getId(), user.id(), MembershipStatus.APPROVED);
+        var membershipResult = membershipResolution.findApprovedMembership(library.getId(), user.id());
         if (membershipResult.isEmpty()) {
             log.debug("tenant_diagnostic {}", TenantContext.membershipDiagnosticSummary(false));
         }

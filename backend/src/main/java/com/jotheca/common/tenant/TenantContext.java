@@ -72,6 +72,18 @@ public final class TenantContext {
         DIAGNOSTIC.set(new DiagnosticState(hasProvisionalDatabaseScope(), transactionActive, false, false));
     }
 
+    /** Mark the Spring transaction as active without changing any observed arming state. */
+    public static void markMembershipTransactionActive() {
+        DiagnosticState state = DIAGNOSTIC.get();
+        if (state == null) {
+            DIAGNOSTIC.set(new DiagnosticState(hasProvisionalDatabaseScope(), true, false, false));
+        } else {
+            DIAGNOSTIC.set(new DiagnosticState(
+                    state.provisionalScopePresent(), true,
+                    state.tenantArmingAttempted(), state.tenantArmingSucceeded()));
+        }
+    }
+
     /** Record datasource arming state for the current membership lookup, without exposing tenant data. */
     static void recordTenantArming(boolean succeeded) {
         DiagnosticState state = DIAGNOSTIC.get();

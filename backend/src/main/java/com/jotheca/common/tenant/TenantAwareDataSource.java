@@ -52,8 +52,9 @@ public class TenantAwareDataSource {
         };
     }
 
-    private static Connection wrap(Connection raw) {
+    private static Connection wrap(Connection raw) throws SQLException {
         final boolean[] tenantArmingFailed = {false};
+        final boolean[] tenantArmed = {false};
         InvocationHandler handler = (proxy, method, args) -> {
             if (tenantArmingFailed[0] && !isCleanupMethod(method.getName())) {
                 throw new SQLException("Tenant scope was not armed; connection is unavailable");
@@ -67,30 +68,53 @@ public class TenantAwareDataSource {
             Object result = method.invoke(raw, args);
             if ("setAutoCommit".equals(method.getName())
                     && args != null && args.length == 1 && Boolean.FALSE.equals(args[0])) {
-                String tenantId = TenantContext.databaseTenantId();
-                if (tenantId != null) {
-                    TenantContext.recordTenantArming(false);
-                    try {
-                        String product = raw.getMetaData().getDatabaseProductName().toLowerCase();
-                        if (product.contains("postgres")) {
-                            try (PreparedStatement ps =
-                                         raw.prepareStatement("SELECT set_config('app.tenant_id', ?, true)")) {
-                                ps.setString(1, tenantId);
-                                ps.execute();
-                            }
-                        }
-                        TenantContext.recordTenantArming(true);
-                    } catch (Exception e) {
-                        tenantArmingFailed[0] = true;
-                        log.warn("Failed to arm RLS session variable; transaction initialization aborted");
-                        throw new SQLException("Failed to arm RLS tenant scope", e);
-                    }
-                }
+                armTenantIfRequired(raw, tenantArmingFailed, tenantArmed);
             }
             return result;
         };
-        return (Connection) Proxy.newProxyInstance(Connection.class.getClassLoader(),
+        Connection guarded = (Connection) Proxy.newProxyInstance(Connection.class.getClassLoader(),
                 new Class<?>[]{Connection.class}, handler);
+        try {
+            if (!raw.getAutoCommit()) {
+                armTenantIfRequired(raw, tenantArmingFailed, tenantArmed);
+            }
+        } catch (SQLException e) {
+            try {
+                raw.close();
+            } catch (SQLException closeFailure) {
+                e.addSuppressed(closeFailure);
+            }
+            throw e;
+        }
+        return guarded;
+    }
+
+    private static void armTenantIfRequired(Connection raw, boolean[] tenantArmingFailed,
+                                             boolean[] tenantArmed) throws SQLException {
+        if (tenantArmed[0]) {
+            return;
+        }
+        String tenantId = TenantContext.databaseTenantId();
+        if (tenantId == null) {
+            return;
+        }
+        TenantContext.recordTenantArming(false);
+        try {
+            String product = raw.getMetaData().getDatabaseProductName().toLowerCase();
+            if (product.contains("postgres")) {
+                try (PreparedStatement ps =
+                             raw.prepareStatement("SELECT set_config('app.tenant_id', ?, true)")) {
+                    ps.setString(1, tenantId);
+                    ps.execute();
+                }
+            }
+            tenantArmed[0] = true;
+            TenantContext.recordTenantArming(true);
+        } catch (Exception e) {
+            tenantArmingFailed[0] = true;
+            log.warn("Failed to arm RLS session variable; transaction initialization aborted");
+            throw new SQLException("Failed to arm RLS tenant scope", e);
+        }
     }
 
     private static boolean isCleanupMethod(String methodName) {

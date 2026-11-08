@@ -35,6 +35,7 @@ class TenantAwareDataSourceTest {
         PreparedStatement statement = mock(PreparedStatement.class);
         DataSource source = dataSource(raw);
         when(raw.getMetaData()).thenReturn(metadata);
+        when(raw.getAutoCommit()).thenReturn(true);
         when(metadata.getDatabaseProductName()).thenReturn("PostgreSQL");
         when(raw.prepareStatement(anyString())).thenReturn(statement);
         TenantContext.setProvisionalDatabaseTenant("library-a");
@@ -55,6 +56,7 @@ class TenantAwareDataSourceTest {
         DataSource source = dataSource(raw);
         when(raw.getMetaData()).thenReturn(metadata);
         when(metadata.getDatabaseProductName()).thenReturn("PostgreSQL");
+        when(raw.getAutoCommit()).thenReturn(true);
         when(raw.prepareStatement(anyString())).thenReturn(statement);
         doThrow(new java.sql.SQLException("set_config failed")).when(statement).execute();
         TenantContext.setProvisionalDatabaseTenant("library-a");
@@ -106,6 +108,7 @@ class TenantAwareDataSourceTest {
         PreparedStatement statement = mock(PreparedStatement.class);
         when(raw.getMetaData()).thenReturn(metadata);
         when(metadata.getDatabaseProductName()).thenReturn("PostgreSQL");
+        when(raw.getAutoCommit()).thenReturn(true);
         when(raw.prepareStatement(anyString())).thenReturn(statement);
         doThrow(new java.sql.SQLException("set_config failed")).when(statement).execute();
         TenantContext.setProvisionalDatabaseTenant("library-a");
@@ -146,6 +149,43 @@ class TenantAwareDataSourceTest {
         verify(subsequent).setAutoCommit(false);
         verify(subsequent).commit();
         verify(subsequent).close();
+    }
+
+    @Test
+    void alreadyDisabledAutoCommitConnectionIsArmedBeforeUse() throws Exception {
+        Connection raw = mock(Connection.class);
+        DatabaseMetaData metadata = mock(DatabaseMetaData.class);
+        PreparedStatement statement = mock(PreparedStatement.class);
+        when(raw.getAutoCommit()).thenReturn(false);
+        when(raw.getMetaData()).thenReturn(metadata);
+        when(metadata.getDatabaseProductName()).thenReturn("PostgreSQL");
+        when(raw.prepareStatement(anyString())).thenReturn(statement);
+        TenantContext.setProvisionalDatabaseTenant("library-a");
+
+        Connection connection = wrapped(dataSource(raw)).getConnection();
+
+        verify(statement).setString(1, "library-a");
+        verify(statement).execute();
+        verify(raw, never()).close();
+        connection.close();
+    }
+
+    @Test
+    void failedArmingOnAlreadyDisabledConnectionClosesAndPropagatesSqlException() throws Exception {
+        Connection raw = mock(Connection.class);
+        DatabaseMetaData metadata = mock(DatabaseMetaData.class);
+        PreparedStatement statement = mock(PreparedStatement.class);
+        when(raw.getAutoCommit()).thenReturn(false);
+        when(raw.getMetaData()).thenReturn(metadata);
+        when(metadata.getDatabaseProductName()).thenReturn("PostgreSQL");
+        when(raw.prepareStatement(anyString())).thenReturn(statement);
+        doThrow(new java.sql.SQLException("set_config failed")).when(statement).execute();
+        TenantContext.setProvisionalDatabaseTenant("library-a");
+
+        assertThatThrownBy(() -> wrapped(dataSource(raw)).getConnection())
+                .isInstanceOf(java.sql.SQLException.class)
+                .hasMessageContaining("Failed to arm RLS tenant scope");
+        verify(raw).close();
     }
 
     private static DataSource dataSource(Connection raw) throws java.sql.SQLException {
