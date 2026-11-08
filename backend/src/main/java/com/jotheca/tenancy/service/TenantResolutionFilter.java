@@ -88,6 +88,10 @@ public class TenantResolutionFilter extends OncePerRequestFilter {
         if (library.getStatus() != LibraryStatus.ACTIVE) {
             throw ApiException.forbidden("TENANT_INACTIVE", "This library is not active");
         }
+
+        // The server-resolved library id arms only the membership lookup. It is not an authorized
+        // TenantContext and cannot satisfy TenantContext.require() or TenantGuard checks.
+        TenantContext.setProvisionalDatabaseTenant(library.getId());
         Membership membership = memberships
                 .findByTenantIdAndUserIdAndStatus(library.getId(), user.id(), MembershipStatus.APPROVED)
                 .orElseThrow(() -> ApiException.forbidden("NO_MEMBERSHIP",

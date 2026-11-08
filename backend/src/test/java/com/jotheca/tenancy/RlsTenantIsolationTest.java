@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -60,20 +61,33 @@ class RlsTenantIsolationTest {
                 """.formatted(READALL_PW));
 
             st.execute("CREATE TABLE rls_probe (id bigserial PRIMARY KEY, tenant_id text NOT NULL, note text)");
+            st.execute("CREATE TABLE membership_probe (id bigserial PRIMARY KEY, tenant_id text NOT NULL, user_id text NOT NULL, status text NOT NULL)");
             // Least-privilege grants (mirrors V26 grantLeastPrivilege).
             st.execute("GRANT USAGE, SELECT ON SEQUENCE rls_probe_id_seq TO jotheca_app");
             st.execute("GRANT SELECT, INSERT, UPDATE, DELETE ON rls_probe TO jotheca_app");
+            st.execute("GRANT SELECT ON membership_probe TO jotheca_app");
             st.execute("GRANT SELECT ON rls_probe TO jotheca_readall");
             // Fail-closed policy — identical shape to V26.
             st.execute("ALTER TABLE rls_probe ENABLE ROW LEVEL SECURITY");
             st.execute("ALTER TABLE rls_probe FORCE ROW LEVEL SECURITY");
+            st.execute("ALTER TABLE membership_probe ENABLE ROW LEVEL SECURITY");
+            st.execute("ALTER TABLE membership_probe FORCE ROW LEVEL SECURITY");
             st.execute("""
                 CREATE POLICY rls_probe_tenant_isolation ON rls_probe
                 USING (tenant_id = current_setting('app.tenant_id', true))
                 WITH CHECK (tenant_id = current_setting('app.tenant_id', true))
                 """);
+            st.execute("""
+                CREATE POLICY membership_probe_tenant_isolation ON membership_probe
+                USING (tenant_id = current_setting('app.tenant_id', true))
+                WITH CHECK (tenant_id = current_setting('app.tenant_id', true))
+                """);
             // Seed as owner (owner bypasses RLS): 2 rows in tenant A, 1 row in tenant B.
             st.execute("INSERT INTO rls_probe(tenant_id, note) VALUES ('A','A-1'),('A','A-2'),('B','B-1')");
+            st.execute("""
+                    INSERT INTO membership_probe(tenant_id, user_id, status) VALUES
+                    ('A', 'user-a', 'APPROVED'), ('B', 'user-a', 'APPROVED')
+                    """);
         }
     }
 
@@ -81,6 +95,7 @@ class RlsTenantIsolationTest {
     static void tearDown() throws Exception {
         try (Connection owner = owner(); Statement st = owner.createStatement()) {
             st.execute("DROP TABLE IF EXISTS rls_probe");
+            st.execute("DROP TABLE IF EXISTS membership_probe");
             st.execute("DROP TABLE IF EXISTS rls_audit");
         }
     }
@@ -120,6 +135,19 @@ class RlsTenantIsolationTest {
         }
     }
 
+    /** Mirrors MembershipRepository's tenant/user/status lookup on a real RLS-protected connection. */
+    private static int approvedMemberships(Connection c, String tenant, String userId) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement(
+                "SELECT count(*) FROM membership_probe WHERE tenant_id = ? AND user_id = ? AND status = 'APPROVED'")) {
+            ps.setString(1, tenant);
+            ps.setString(2, userId);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                return rs.getInt(1);
+            }
+        }
+    }
+
     @Test
     @DisplayName("cross-tenant READ is denied: tenant A sees only A rows, never B")
     void crossTenantReadDenied() throws Exception {
@@ -128,6 +156,22 @@ class RlsTenantIsolationTest {
             assertThat(countRows(app)).isEqualTo(2);
             assertThat(countRowsForTenant(app, "A")).isEqualTo(2);
             assertThat(countRowsForTenant(app, "B")).isZero();
+            app.rollback();
+        }
+    }
+
+    @Test
+    @DisplayName("membership lookup is tenant-scoped before authorization is promoted")
+    void membershipLookupWorksOnlyAfterTheTransactionIsArmed() throws Exception {
+        try (Connection app = asApp()) {
+            beginTxAsTenant(app, "A");
+            assertThat(approvedMemberships(app, "A", "user-a")).isEqualTo(1);
+            assertThat(approvedMemberships(app, "B", "user-a")).isZero();
+            app.commit();
+
+            // SET LOCAL must not leak into the next transaction on the same connection.
+            app.setAutoCommit(false);
+            assertThat(approvedMemberships(app, "A", "user-a")).isZero();
             app.rollback();
         }
     }

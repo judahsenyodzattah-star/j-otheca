@@ -93,6 +93,22 @@ class TenantIsolationTest {
     }
 
     @Test
+    void inactiveTenantIsRejectedBeforeMembershipAuthorization() throws Exception {
+        String uid = DevDataSeeder.ASHESI_UID;
+        jdbc.update("UPDATE libraries SET status = 'SUSPENDED' WHERE uid = ?", uid);
+        try {
+            String libadmin = TestApi.login(mvc, "libadmin@jotheca.app", "Library12345!");
+            mvc.perform(get("/api/v1/tenant/members")
+                            .header("Authorization", TestApi.bearer(libadmin))
+                            .header("X-Library-Id", uid))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("TENANT_INACTIVE"));
+        } finally {
+            jdbc.update("UPDATE libraries SET status = 'ACTIVE' WHERE uid = ?", uid);
+        }
+    }
+
+    @Test
     void missingTenantHeaderFailsClosed() throws Exception {
         String libadmin = TestApi.login(mvc, "libadmin@jotheca.app", "Library12345!");
         mvc.perform(get("/api/v1/tenant/members")
